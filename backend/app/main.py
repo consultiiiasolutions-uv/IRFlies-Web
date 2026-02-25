@@ -15,7 +15,7 @@ from .schemas import (
 )
 from .preview_service import build_preview_png
 from .storage import download_bytes, new_tmp_object_name, generate_v4_signed_upload_url, list_objects, delete_object
-from .yolo_service import detect_rois_stub
+from .yolo_service import detect_rois
 from .classifier_service import classify_image
 
 
@@ -74,7 +74,7 @@ def preview_gcs(payload: PreviewGcsRequest):
 async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.25)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
-    rois = detect_rois_stub(image_bytes, conf=conf)
+    rois = detect_rois(image_bytes, conf=conf)
     return DetectResponse(rois=rois)
 
 
@@ -82,7 +82,7 @@ async def detect_upload(file: UploadFile = File(...), conf: float = Form(default
 def detect_gcs(payload: DetectGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-    rois = detect_rois_stub(image_bytes, conf=payload.conf)
+    rois = detect_rois(image_bytes, conf=conf)
     return DetectResponse(rois=rois)
 
 
