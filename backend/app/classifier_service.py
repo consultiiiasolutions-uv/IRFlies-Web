@@ -74,13 +74,17 @@ def _cache_path_for_uri(model_uri: str) -> str:
     h = hashlib.sha256(model_uri.encode("utf-8")).hexdigest()[:16]
     base_dir = "/tmp/irflies_models"
     os.makedirs(base_dir, exist_ok=True)
-    return os.path.join(base_dir, f"model_{h}.keras")
+
+    # respeta extensión del modelo remoto
+    ext = ".h5" if model_uri.lower().endswith(".h5") else ".keras"
+    return os.path.join(base_dir, f"model_{h}{ext}")
 
 
-def _validate_keras_file(path: str, expected_size: Optional[int] = None) -> None:
+def _validate_model_file(path: str, expected_size: Optional[int] = None) -> None:
     """
-    Validación “barata” pero efectiva para evitar el caso:
-    ZIP truncado / corrupto -> Keras ve weights vacíos -> stem_conv 0 variables
+    Validación para:
+      - .keras: zip con metadata/config/weights
+      - .h5: solo tamaño/existencia (load_model valida internamente)
     """
     if not os.path.exists(path):
         raise RuntimeError(f"Modelo no existe en {path}")
@@ -94,6 +98,12 @@ def _validate_keras_file(path: str, expected_size: Optional[int] = None) -> None
             f"Tamaño incorrecto: local={size} bytes, esperado={expected_size} bytes, path={path}"
         )
 
+    # Si es .h5: no es zip, basta con tamaño/existencia
+    if path.lower().endswith(".h5"):
+        log.info("[classifier] h5_ok path=%s size_bytes=%d expected=%s", path, size, expected_size)
+        return
+
+    # Si no es .h5, asumimos .keras
     if not zipfile.is_zipfile(path):
         raise RuntimeError(f"El archivo no parece .keras (zip). path={path}")
 
@@ -112,10 +122,7 @@ def _validate_keras_file(path: str, expected_size: Optional[int] = None) -> None
         if wsize <= 0:
             raise RuntimeError(f"model.weights.h5 viene vacío dentro del .keras. path={path}")
 
-    log.info(
-        "[classifier] keras_ok path=%s size_bytes=%d expected=%s",
-        path, size, expected_size
-    )
+    log.info("[classifier] keras_ok path=%s size_bytes=%d expected=%s", path, size, expected_size)
 
 
 def _download_gcs_to_path(model_uri: str, local_path: str) -> None:
@@ -128,9 +135,12 @@ def _download_gcs_to_path(model_uri: str, local_path: str) -> None:
 
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
+    # suffix de tmp acorde a extensión
+    suffix = ".h5" if local_path.lower().endswith(".h5") else ".keras"
+
     # Descarga atómica: primero a tmp, valida, luego rename.
     with tempfile.NamedTemporaryFile(
-        prefix="dl_", suffix=".keras", dir=os.path.dirname(local_path), delete=False
+        prefix="dl_", suffix=suffix, dir=os.path.dirname(local_path), delete=False
     ) as tmp:
         tmp_path = tmp.name
 
@@ -138,7 +148,7 @@ def _download_gcs_to_path(model_uri: str, local_path: str) -> None:
         log.info("Descargando modelo: %s -> %s (expected_size=%s)", model_uri, tmp_path, expected_size)
         blob.download_to_filename(tmp_path)
 
-        _validate_keras_file(tmp_path, expected_size=expected_size)
+        _validate_model_file(tmp_path, expected_size=expected_size)
 
         os.replace(tmp_path, local_path)  # atómico
         log.info("Modelo cacheado en: %s", local_path)
@@ -156,7 +166,6 @@ def _ensure_model_local_path(model_uri: str) -> str:
     Descarga el modelo desde GCS a /tmp si hace falta (y valida).
     """
     if not model_uri.startswith("gs://"):
-        # Si un día cambias a path local, aquí solo validamos existencia/tamaño.
         if not os.path.exists(model_uri) or os.path.getsize(model_uri) <= 0:
             raise RuntimeError(f"Modelo local inválido: {model_uri}")
         return model_uri
@@ -166,8 +175,7 @@ def _ensure_model_local_path(model_uri: str) -> str:
     # Si existe, valida; si está mal, bórralo y re-descarga
     if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
         try:
-            # Aquí no sabemos el expected_size sin llamar a GCS; lo validamos “estructural”.
-            _validate_keras_file(local_path, expected_size=None)
+            _validate_model_file(local_path, expected_size=None)
             return local_path
         except Exception as e:
             log.warning("Cache inválido, re-descargando. reason=%s", e)
@@ -209,7 +217,7 @@ def _load_model_if_needed() -> Tuple[tf.keras.Model, Tuple[int, int], Optional[L
 
         model_uri = (getattr(settings, "classifier_model_uri", None) or os.getenv("IRFLIES_CLASSIFIER_MODEL_URI", "")).strip()
         if not model_uri:
-            raise RuntimeError("Falta IRFLIES_CLASSIFIER_MODEL_URI (gs://.../refit_model.keras)")
+            raise RuntimeError("Falta IRFLIES_CLASSIFIER_MODEL_URI (gs://.../refit_model.keras o .h5)")
 
         local_path = _ensure_model_local_path(model_uri)
 
