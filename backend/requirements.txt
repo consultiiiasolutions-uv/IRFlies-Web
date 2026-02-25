@@ -2,32 +2,12 @@ fastapi==0.115.8
 uvicorn[standard]==0.30.6
 python-multipart==0.0.9
 
-# ==== UI ====
-PySide6>=6.6,<6.8
+pydantic==2.10.6
+pydantic-settings==2.7.1
 
-# ==== Núcleo numérico e imágenes ====
-numpy>=1.26,<2.0
-pillow>=10.3,<11.0
+google-cloud-storage==2.19.0
+google-auth==2.38.0
+requests==2.32.3
 
-# ==== ML / Inferencia (CPU por defecto) ====
-tensorflow>=2.15,<2.16
-# NOTA GPU (opcional): si usarás GPU vía WSL/Linux y CUDA por pip, puedes usar:
-# tensorflow[and-cuda]>=2.15,<2.16
-# En Windows nativo, mantén la línea de CPU (arriba) para evitar conflictos.
-
-# ==== Detección de ojos (YOLOv8) ====
-# Ultralytics trae YOLOv8 y gestionará la instalación de PyTorch por defecto.
-# Si quieres una versión concreta de torch/cuda, instálala aparte antes.
-ultralytics>=8.2.0,<9.0
-
-# ==== Utilidades de configuración y datos ====
-pyyaml>=6.0.1,<7.0       # para registry.yaml y config
-pandas>=2.1,<3.0         # exportar y manipular CSV/Excel
-openpyxl>=3.1,<4.0       # escribir Excel (opcional, pero útil)
-
-# ==== Calibración/metricación opcional (si la usas) ====
-scikit-learn>=1.3,<1.6   # Platt/Temperature scaling, utilidades métricas
-
-# ==== Logging y extras útiles ====
-loguru>=0.7,<1.0         # logging claro en consola y archivos
-tqdm>=4.66,<5.0          # barra de progreso para lotes (si decides usarla)
+pillow==10.4.0
+numpy==1.26.4
