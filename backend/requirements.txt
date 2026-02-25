@@ -11,3 +11,5 @@ requests==2.32.3
 
 Pillow==11.3.0
 numpy==1.26.4
+
+tensorflow-cpu==2.15.1
