@@ -3,6 +3,9 @@ import io
 import os
 import json
 import logging
+import zipfile
+import hashlib
+import tempfile
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -63,28 +66,113 @@ def _load_labels_from_env() -> Optional[List[str]]:
     return None
 
 
+def _cache_path_for_uri(model_uri: str) -> str:
+    # cache determinista para no chocar con nombres iguales
+    h = hashlib.sha256(model_uri.encode("utf-8")).hexdigest()[:16]
+    base_dir = "/tmp/irflies_models"
+    os.makedirs(base_dir, exist_ok=True)
+    return os.path.join(base_dir, f"model_{h}.keras")
+
+
+def _validate_keras_file(path: str, expected_size: Optional[int] = None) -> None:
+    if not os.path.exists(path):
+        raise RuntimeError(f"Modelo no existe en {path}")
+
+    size = os.path.getsize(path)
+    if size <= 0:
+        raise RuntimeError(f"Modelo vacío en {path}")
+
+    if expected_size is not None and size != expected_size:
+        raise RuntimeError(f"Tamaño incorrecto: local={size} bytes, esperado={expected_size} bytes, path={path}")
+
+    if not zipfile.is_zipfile(path):
+        raise RuntimeError(f"El archivo no parece .keras (zip). path={path}")
+
+    z = zipfile.ZipFile(path)
+    names = z.namelist()
+    # Lo mínimo que vimos en tu archivo:
+    # ['metadata.json','config.json','model.weights.h5']
+    required = {"metadata.json", "config.json", "model.weights.h5"}
+    missing = required.difference(set(names))
+    if missing:
+        raise RuntimeError(f".keras inválido, faltan entradas {sorted(missing)}. path={path}")
+
+    # Integridad: si algo está corrupto, testzip devuelve el primer nombre roto
+    bad = z.testzip()
+    if bad is not None:
+        raise RuntimeError(f".keras corrupto: entrada dañada '{bad}'. path={path}")
+
+    # Extra: el weights.h5 no debe venir en 0 bytes
+    wsize = z.getinfo("model.weights.h5").file_size
+    if wsize <= 0:
+        raise RuntimeError(f"model.weights.h5 viene vacío dentro del .keras. path={path}")
+
+    # Debug útil (sale en logs de Cloud Run)
+    log.info("[classifier] local_path=%s size_bytes=%d zip_entries=%s weights_h5_bytes=%d",
+             path, size, names, wsize)
+
+
+def _download_gcs_to_path(model_uri: str, local_path: str) -> None:
+    bucket_name, blob_name = _parse_gcs_uri(model_uri)
+    client = _get_gcs_client()
+
+    blob = client.bucket(bucket_name).get_blob(blob_name)
+    if blob is None:
+        raise RuntimeError(f"No existe el objeto en GCS: {model_uri}")
+
+    expected_size = int(blob.size) if blob.size is not None else None
+
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+    # Descarga atómica: primero a un tmp, luego rename.
+    with tempfile.NamedTemporaryFile(prefix="dl_", suffix=".keras", dir=os.path.dirname(local_path), delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        log.info("Descargando modelo de GCS: %s -> %s (expected_size=%s)", model_uri, tmp_path, expected_size)
+        blob.download_to_filename(tmp_path)
+
+        # valida el tmp
+        _validate_keras_file(tmp_path, expected_size=expected_size)
+
+        # rename atómico
+        os.replace(tmp_path, local_path)
+        log.info("Modelo listo en cache: %s", local_path)
+    except Exception:
+        # limpia tmp si algo falló
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+        raise
+
+
 def _ensure_model_local_path(model_uri: str) -> str:
     """
-    Descarga el modelo desde GCS a /tmp si hace falta.
+    Descarga el modelo desde GCS a /tmp si hace falta (y valida).
     Si model_uri no es gs://, se asume path local dentro del container.
     """
     if model_uri.startswith("gs://"):
-        bucket, blob = _parse_gcs_uri(model_uri)
-        filename = os.path.basename(blob)
-        local_path = os.path.join("/tmp", filename)
+        local_path = _cache_path_for_uri(model_uri)
 
-        # Si ya existe y pesa > 0, no vuelvas a bajar
+        # si existe, valida; si falla, bórralo y re-descarga
         if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-            return local_path
+            try:
+                _validate_keras_file(local_path, expected_size=None)  # size exacto ya se valida al bajar
+                return local_path
+            except Exception as e:
+                log.warning("Cache de modelo inválida, re-descargando. reason=%s", e)
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
 
-        log.info("Descargando modelo de GCS: %s -> %s", model_uri, local_path)
-        client = _get_gcs_client()
-        client.bucket(bucket).blob(blob).download_to_filename(local_path)
-
-        size = os.path.getsize(local_path)
-        log.info("Modelo descargado OK (%d bytes): %s", size, local_path)
+        _download_gcs_to_path(model_uri, local_path)
         return local_path
 
+    # Path local en imagen/container
+    _validate_keras_file(model_uri, expected_size=None)
     return model_uri
 
 
@@ -100,8 +188,19 @@ def _load_model_if_needed() -> Tuple[tf.keras.Model, Tuple[int, int], Optional[L
 
     local_path = _ensure_model_local_path(model_uri)
 
-    log.info("Cargando modelo Keras desde: %s", local_path)
-    _MODEL = tf.keras.models.load_model(local_path, compile=False)
+    log.info("Cargando modelo Keras desde: %s (tf=%s)", local_path, tf.__version__)
+
+    try:
+        _MODEL = tf.keras.models.load_model(local_path, compile=False)
+    except Exception as e:
+        # MUY importante: si falló, borra el cache para no quedar atorado con archivo roto
+        log.exception("Fallo load_model(). Borrando cache para reintentar en el siguiente request. err=%s", e)
+        try:
+            if model_uri.startswith("gs://") and os.path.exists(local_path):
+                os.remove(local_path)
+        except Exception:
+            pass
+        raise
 
     # Detecta input shape (batch, H, W, C)
     inp = _MODEL.input_shape
@@ -124,42 +223,35 @@ def _preprocess(image_bytes: bytes, hw: Tuple[int, int]) -> np.ndarray:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     arr = np.array(img)  # (H,W,3) uint8
 
-    # Resize
     arr_tf = tf.convert_to_tensor(arr)
     arr_tf = tf.image.resize(arr_tf, (h, w), method="bilinear")
     arr = arr_tf.numpy().astype(np.float32)
 
-    # Normaliza a [0,1]
     arr = arr / 255.0
     x = np.expand_dims(arr, axis=0)  # (1,h,w,3)
     return x
 
 
 def classify_image(image_bytes: bytes) -> ClassifyResponse:
-    # Si no está activado, seguimos respondiendo como antes
     if not settings.classifier_enabled:
         return ClassifyResponse(label="not_configured", score=0.0, probs={})
 
     model, hw, labels = _load_model_if_needed()
     x = _preprocess(image_bytes, hw)
 
-    # Predict
     pred = model.predict(x, verbose=0)
     if isinstance(pred, list):
         pred = pred[0]
     pred = np.array(pred)
 
-    # Si viene (1,n) -> (n,)
     if pred.ndim == 2 and pred.shape[0] == 1:
         pred = pred[0]
 
-    # Caso clasificación: vector tamaño n
     if pred.ndim == 1 and pred.size > 1:
         vec = pred.astype(np.float32)
 
-        # Si no parece softmax, aplica softmax
         s = float(np.sum(vec))
-        if (vec.min() < 0.0) or (vec.max() > 1.0 + 1e-3) or (abs(s - 1.0) > 1e-2):
+        if (vec.min() < 0.0) or (vec.max() > 1.0 + 1e-3) or (abs(s - 1.0) > 1.0e-2):
             vec = tf.nn.softmax(vec).numpy().astype(np.float32)
 
         idx = int(np.argmax(vec))
@@ -173,7 +265,6 @@ def classify_image(image_bytes: bytes) -> ClassifyResponse:
         probs: Dict[str, float] = {name(i): float(vec[i]) for i in range(vec.size)}
         return ClassifyResponse(label=name(idx), score=score, probs=probs)
 
-    # Caso “regresión” o salida rara: devuelve valor crudo
     try:
         val = float(np.ravel(pred)[0])
     except Exception:
