@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # Flags (para cuando actives inferencia real)
     yolo_enabled: bool = False
     classifier_enabled: bool = False
-
+    yolo_model_uri: str = ""
     # Modelo clasificador (GCS o path local)
     classifier_model_uri: str = ""
 
