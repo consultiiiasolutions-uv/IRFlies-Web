@@ -1,10 +1,11 @@
-from .config import settings
-from .schemas import RoiXYXY
+# backend/app/yolo_service.py
 
+from typing import List
+from .schemas import RoiXYXY  # si ya lo tienes; si no, quita esta línea y devuelve dicts
 
-def detect_rois_stub(_image_bytes: bytes, _conf: float = 0.25) -> list[RoiXYXY]:
-    # Stub intencional: para que el backend funcione ya.
-    # Cuando actives YOLO real, aquí cargas pesos desde GCS y ejecutas inferencia.
-    if not settings.yolo_enabled:
-        return []
-    raise RuntimeError("YOLO enabled pero no implementado todavía.")
+def detect_rois_stub(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
+    """
+    Stub temporal: devuelve ROIs vacíos.
+    conf se acepta para que el endpoint no truene.
+    """
+    return []
