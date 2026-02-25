@@ -6,10 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependencias mínimas para Pillow
+# Dependencias mínimas para Pillow + (libgomp1 para TF CPU / numpy wheels)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg62-turbo \
     zlib1g \
+    libgomp1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
