@@ -1,11 +1,11 @@
 import re
 import uuid
-from datetime import timedelta
 from typing import Optional, Tuple
 
+from datetime import timedelta
 import google.auth
 from google.auth.transport.requests import Request
-from google.auth import iam
+from google.auth import impersonated_credentials
 from google.cloud import storage
 
 from .config import settings
@@ -62,29 +62,38 @@ def generate_v4_signed_upload_url(
     ttl_seconds: int,
 ) -> str:
     """
-    Signed URL (V4) sin key local: usa IAM signBlob.
-    Requiere que el service account de Cloud Run tenga roles/iam.serviceAccountTokenCreator sobre sí mismo.
+    Signed URL (V4) en Cloud Run sin key local.
+    Usa IAMCredentials via impersonated_credentials.
+    Requiere roles/iam.serviceAccountTokenCreator (ya lo intentaste dar).
     """
-    client = gcs_client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(object_name)
+    client = storage.Client()
+    blob = client.bucket(bucket_name).blob(object_name)
 
-    # Credenciales ADC + signer IAM
-    credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    req = Request()
-    credentials.refresh(req)
+    source_credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
 
-    sa_email = getattr(credentials, "service_account_email", None)
+    # Asegura credenciales frescas
+    if not source_credentials.valid:
+        source_credentials.refresh(Request())
+
+    # En Cloud Run esto normalmente existe
+    sa_email = getattr(source_credentials, "service_account_email", None)
     if not sa_email:
-        raise RuntimeError("No pude obtener service_account_email de ADC (necesario para signed URLs).")
+        raise RuntimeError("No pude obtener service_account_email desde ADC en Cloud Run.")
 
-    signer = iam.Signer(req, credentials, sa_email)
+    # Impersonar al mismo SA (o a otro) para poder firmar
+    target_credentials = impersonated_credentials.Credentials(
+        source_credentials=source_credentials,
+        target_principal=sa_email,
+        target_scopes=["https://www.googleapis.com/auth/devstorage.read_write"],
+        lifetime=min(ttl_seconds, 3600),
+    )
 
     return blob.generate_signed_url(
         version="v4",
         expiration=timedelta(seconds=ttl_seconds),
         method="PUT",
         content_type=content_type,
-        credentials=credentials,
-        signer=signer,
+        credentials=target_credentials,
     )
