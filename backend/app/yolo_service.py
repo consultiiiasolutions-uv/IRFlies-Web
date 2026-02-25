@@ -116,6 +116,37 @@ def _load_yolo_if_needed():
         _YOLO = YOLO(local_path)
         return _YOLO
 
+def _iou(a, b) -> float:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    inter_x1 = max(ax1, bx1)
+    inter_y1 = max(ay1, by1)
+    inter_x2 = min(ax2, bx2)
+    inter_y2 = min(ay2, by2)
+    iw = max(0.0, inter_x2 - inter_x1)
+    ih = max(0.0, inter_y2 - inter_y1)
+    inter = iw * ih
+    if inter <= 0.0:
+        return 0.0
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = area_a + area_b - inter
+    return float(inter / union) if union > 0 else 0.0
+
+
+def _nms_indices(boxes, scores, iou_thresh: float, max_det: int):
+    # boxes: (N,4) float
+    order = list(np.argsort(-scores))
+    keep = []
+    while order and len(keep) < max_det:
+        i = order.pop(0)
+        keep.append(i)
+        new_order = []
+        for j in order:
+            if _iou(boxes[i], boxes[j]) < iou_thresh:
+                new_order.append(j)
+        order = new_order
+    return keep
 
 def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     """
@@ -153,7 +184,8 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     names = getattr(r0, "names", None) or getattr(yolo, "names", None) or {}
 
     # ordenar por score desc y tomar top-k
-    idxs = np.argsort(-scores)[:max_det]
+    iou_thresh = float(os.getenv("IRFLIES_YOLO_IOU_THRESH", "0.6"))
+    idxs = _nms_indices(xyxy, scores, iou_thresh=iou_thresh, max_det=max_det)
 
     rois: List[RoiXYXY] = []
     for i in idxs:
