@@ -1,34 +1,50 @@
+substitutions:
+  _DEPLOY_REGION: northamerica-south1
+  _AR_HOSTNAME: northamerica-south1-docker.pkg.dev
+  _AR_REPOSITORY: irflies
+  _SERVICE_NAME: irflies-api
+  _IMAGE_NAME: irflies-api
+  _RUN_SA: irflies-api-sa@irflies-uv.iam.gserviceaccount.com
+
 steps:
-  - name: gcr.io/cloud-builders/docker
-    dir: backend/app
+  - name: "gcr.io/cloud-builders/docker"
     args:
-      - build
-      - -t
-      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
-      - .
+      [
+        "build",
+        "-t",
+        "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}",
+        "-f",
+        "backend/Dockerfile",
+        "backend"
+      ]
 
-  - name: gcr.io/cloud-builders/docker
+  - name: "gcr.io/cloud-builders/docker"
     args:
-      - push
-      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
+      [
+        "push",
+        "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
+      ]
 
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: gcloud
     args:
-      - run
-      - deploy
-      - ${_SERVICE_NAME}
-      - --image
-      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
-      - --region
-      - ${_DEPLOY_REGION}
-      - --platform
-      - managed
-      - --allow-unauthenticated
+      [
+        "run", "deploy", "${_SERVICE_NAME}",
+        "--image", "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}",
+        "--region", "${_DEPLOY_REGION}",
+        "--platform", "managed",
+        "--allow-unauthenticated",
+        "--service-account", "${_RUN_SA}",
+        "--max-instances", "15",
+        "--concurrency", "4",
+        "--cpu", "1",
+        "--memory", "2Gi",
+        "--set-env-vars",
+        "IRFLIES_MODELS_BUCKET=irflies-uv-models,IRFLIES_TMP_BUCKET=irflies-uv-tmp,IRFLIES_MAX_UPLOAD_MB=10,IRFLIES_SIGNED_URL_TTL_SECONDS=900,IRFLIES_YOLO_ENABLED=false,IRFLIES_CLASSIFIER_ENABLED=false"
+      ]
 
 images:
-  - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
+  - "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
 
-# Esto evita el error que te salió cuando usas service account en el trigger
 options:
   logging: CLOUD_LOGGING_ONLY
