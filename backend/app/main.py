@@ -71,7 +71,7 @@ def preview_gcs(payload: PreviewGcsRequest):
 # Detect (upload / GCS) - stub
 # --------------------
 @app.post("/v1/detect/upload", response_model=DetectResponse)
-async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.25)):
+async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.03)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
     rois = detect_rois(image_bytes, conf=conf)
