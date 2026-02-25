@@ -16,7 +16,7 @@ from .schemas import (
 from .preview_service import build_preview_png
 from .storage import download_bytes, new_tmp_object_name, generate_v4_signed_upload_url, list_objects, delete_object
 from .yolo_service import detect_rois_stub
-from .classifier_service import classify_stub
+from .classifier_service import classify_image
 
 
 app = FastAPI(title="IRFlies API", version="1.0.0")
@@ -87,20 +87,22 @@ def detect_gcs(payload: DetectGcsRequest):
 
 
 # --------------------
-# Classify (upload / GCS) - stub
+# Classify (upload / GCS)
 # --------------------
 @app.post("/v1/classify/upload", response_model=ClassifyResponse)
 async def classify_upload(file: UploadFile = File(...)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
-    return classify_stub(image_bytes)
+    result = classify_image(image_bytes)
+    return result
 
 
 @app.post("/v1/classify/gcs", response_model=ClassifyResponse)
 def classify_gcs(payload: ClassifyGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-    return classify_stub(image_bytes)
+    result = classify_image(image_bytes) 
+    return result
 
 
 # --------------------
