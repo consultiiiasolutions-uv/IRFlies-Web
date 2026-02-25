@@ -1,100 +1,31 @@
-from __future__ import annotations
-
-import base64
-import io
-import json
-from typing import Any, Dict, List, Optional, Tuple, Union
-
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response, JSONResponse
-from pydantic import BaseModel, Field
-from PIL import Image, ImageDraw
+from typing import Optional
+
+from .config import settings
+from .schemas import (
+    RoiXYXY,
+    PreviewGcsRequest,
+    DetectGcsRequest,
+    DetectResponse,
+    ClassifyGcsRequest,
+    ClassifyResponse,
+    SignedUploadUrlRequest,
+    SignedUploadUrlResponse,
+)
+from .preview_service import build_preview_png
+from .storage import download_bytes, new_tmp_object_name, generate_v4_signed_upload_url, list_objects, delete_object
+from .yolo_service import detect_rois_stub
+from .classifier_service import classify_stub
 
 
-app = FastAPI(title="IRFlies API", version="0.1.0")
+app = FastAPI(title="IRFlies API", version="1.0.0")
 
 
-# ---- Modelos de datos ----
-class RoiXYXY(BaseModel):
-    x1: int
-    y1: int
-    x2: int
-    y2: int
-
-
-class RoiXYWH(BaseModel):
-    x: int
-    y: int
-    w: int
-    h: int
-
-
-Roi = Union[RoiXYXY, RoiXYWH]
-
-
-class PreviewJsonRequest(BaseModel):
-    image_base64: str = Field(..., description="Imagen en base64 (png/jpg)")
-    rois: List[Dict[str, Any]] = Field(default_factory=list)
-
-
-def _parse_rois(raw: Any) -> List[Tuple[int, int, int, int]]:
-    """
-    Acepta ROIs en dos formatos:
-    - {x1,y1,x2,y2}
-    - {x,y,w,h}
-    Regresa lista de (x1,y1,x2,y2)
-    """
-    if raw is None:
-        return []
-
-    if isinstance(raw, str):
-        raw = raw.strip()
-        if not raw:
-            return []
-        raw = json.loads(raw)
-
-    if not isinstance(raw, list):
-        raise ValueError("ROIs debe ser una lista.")
-
-    out: List[Tuple[int, int, int, int]] = []
-    for r in raw:
-        if not isinstance(r, dict):
-            raise ValueError("Cada ROI debe ser un objeto/dict.")
-
-        if all(k in r for k in ("x1", "y1", "x2", "y2")):
-            x1, y1, x2, y2 = int(r["x1"]), int(r["y1"]), int(r["x2"]), int(r["y2"])
-        elif all(k in r for k in ("x", "y", "w", "h")):
-            x1, y1 = int(r["x"]), int(r["y"])
-            x2, y2 = x1 + int(r["w"]), y1 + int(r["h"])
-        else:
-            raise ValueError("ROI inválido. Usa {x1,y1,x2,y2} o {x,y,w,h}.")
-
-        out.append((x1, y1, x2, y2))
-    return out
-
-
-def _load_image_bytes(image_bytes: bytes) -> Image.Image:
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img = img.convert("RGB")
-        return img
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No pude leer la imagen: {e}")
-
-
-def _draw_rois(img: Image.Image, rois_xyxy: List[Tuple[int, int, int, int]]) -> Image.Image:
-    draw = ImageDraw.Draw(img)
-    w, h = img.size
-    for (x1, y1, x2, y2) in rois_xyxy:
-        # clamp básico
-        x1 = max(0, min(x1, w - 1))
-        y1 = max(0, min(y1, h - 1))
-        x2 = max(0, min(x2, w - 1))
-        y2 = max(0, min(y2, h - 1))
-        if x2 <= x1 or y2 <= y1:
-            continue
-        draw.rectangle([x1, y1, x2, y2], outline="red", width=3)
-    return img
+def _enforce_max_size(data: bytes) -> None:
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Imagen excede límite de {settings.max_upload_mb}MB")
 
 
 @app.get("/health")
@@ -102,45 +33,111 @@ def health():
     return {"ok": True}
 
 
-# ---- Endpoint 1: multipart/form-data ----
-# file: imagen
-# rois_json: string JSON con la lista de ROIs
-@app.post("/roi/preview")
-async def roi_preview_form(
+# --------------------
+# Preview (upload)
+# --------------------
+@app.post("/v1/preview/upload")
+async def preview_upload(
     file: UploadFile = File(...),
-    rois_json: str = Form(default="[]"),
+    rois_json: str = Form(default="[]"),  # JSON string list[{"x1":..,"y1":..,"x2":..,"y2":..}]
 ):
+    import json
+
     image_bytes = await file.read()
-    img = _load_image_bytes(image_bytes)
+    _enforce_max_size(image_bytes)
 
     try:
-        rois = _parse_rois(rois_json)
+        rois_raw = json.loads(rois_json) if rois_json else []
+        rois = [RoiXYXY(**r) for r in rois_raw]
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"rois_json inválido: {e}")
 
-    img = _draw_rois(img, rois)
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    return Response(content=out.getvalue(), media_type="image/png")
+    png = build_preview_png(image_bytes, rois)
+    return Response(content=png, media_type="image/png")
 
 
-# ---- Endpoint 2: JSON con base64 ----
-@app.post("/roi/preview_json")
-def roi_preview_json(payload: PreviewJsonRequest):
+# --------------------
+# Preview (GCS)
+# --------------------
+@app.post("/v1/preview/gcs")
+def preview_gcs(payload: PreviewGcsRequest):
+    image_bytes = download_bytes(payload.gcs_uri)
+    _enforce_max_size(image_bytes)
+    png = build_preview_png(image_bytes, payload.rois)
+    return Response(content=png, media_type="image/png")
+
+
+# --------------------
+# Detect (upload / GCS) - stub
+# --------------------
+@app.post("/v1/detect/upload", response_model=DetectResponse)
+async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.25)):
+    image_bytes = await file.read()
+    _enforce_max_size(image_bytes)
+    rois = detect_rois_stub(image_bytes, conf=conf)
+    return DetectResponse(rois=rois)
+
+
+@app.post("/v1/detect/gcs", response_model=DetectResponse)
+def detect_gcs(payload: DetectGcsRequest):
+    image_bytes = download_bytes(payload.gcs_uri)
+    _enforce_max_size(image_bytes)
+    rois = detect_rois_stub(image_bytes, conf=payload.conf)
+    return DetectResponse(rois=rois)
+
+
+# --------------------
+# Classify (upload / GCS) - stub
+# --------------------
+@app.post("/v1/classify/upload", response_model=ClassifyResponse)
+async def classify_upload(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    _enforce_max_size(image_bytes)
+    return classify_stub(image_bytes)
+
+
+@app.post("/v1/classify/gcs", response_model=ClassifyResponse)
+def classify_gcs(payload: ClassifyGcsRequest):
+    image_bytes = download_bytes(payload.gcs_uri)
+    _enforce_max_size(image_bytes)
+    return classify_stub(image_bytes)
+
+
+# --------------------
+# Storage ops
+# --------------------
+@app.post("/v1/storage/signed-upload-url", response_model=SignedUploadUrlResponse)
+def signed_upload_url(req: SignedUploadUrlRequest):
+    obj = new_tmp_object_name(req.filename, prefix=req.prefix)
     try:
-        image_bytes = base64.b64decode(payload.image_base64)
-    except Exception:
-        raise HTTPException(status_code=400, detail="image_base64 inválido.")
-
-    img = _load_image_bytes(image_bytes)
-
-    try:
-        rois = _parse_rois(payload.rois)
+        url = generate_v4_signed_upload_url(
+            bucket_name=settings.tmp_bucket,
+            object_name=obj,
+            content_type=req.content_type,
+            ttl_seconds=settings.signed_url_ttl_seconds,
+        )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Error típico si falta TokenCreator
+        raise HTTPException(status_code=500, detail=f"No pude generar signed URL: {e}")
 
-    img = _draw_rois(img, rois)
-    out = io.BytesIO()
-    img.save(out, format="PNG")
-    b64 = base64.b64encode(out.getvalue()).decode("utf-8")
-    return JSONResponse({"image_base64_png": b64})
+    gcs_uri = f"gs://{settings.tmp_bucket}/{obj}"
+    return SignedUploadUrlResponse(
+        signed_url=url,
+        gcs_uri=gcs_uri,
+        bucket=settings.tmp_bucket,
+        object_name=obj,
+        expires_in_seconds=settings.signed_url_ttl_seconds,
+    )
+
+
+@app.get("/v1/storage/tmp/list")
+def tmp_list(prefix: Optional[str] = ""):
+    p = (settings.tmp_prefix or "") + (prefix or "")
+    objs = list_objects(settings.tmp_bucket, prefix=p)
+    return {"bucket": settings.tmp_bucket, "prefix": p, "objects": objs}
+
+
+@app.delete("/v1/storage/tmp/{object_name:path}")
+def tmp_delete(object_name: str):
+    delete_object(settings.tmp_bucket, object_name)
+    return JSONResponse({"deleted": True, "bucket": settings.tmp_bucket, "object": object_name})
