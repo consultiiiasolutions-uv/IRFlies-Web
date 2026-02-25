@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     yolo_enabled: bool = False
     classifier_enabled: bool = False
 
+    # Modelo clasificador (GCS o path local)
+    classifier_model_uri: str = ""
+
     model_config = SettingsConfigDict(
         env_prefix="IRFLIES_",
         case_sensitive=False,
