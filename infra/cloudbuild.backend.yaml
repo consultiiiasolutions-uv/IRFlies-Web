@@ -1,37 +1,34 @@
 steps:
-  # Build
-  - name: "gcr.io/cloud-builders/docker"
-    dir: "backend"
+  - name: gcr.io/cloud-builders/docker
+    dir: backend/app
     args:
-      - "build"
-      - "-t"
-      - "${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}"
-      - "."
+      - build
+      - -t
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
+      - .
 
-  # Push
-  - name: "gcr.io/cloud-builders/docker"
+  - name: gcr.io/cloud-builders/docker
     args:
-      - "push"
-      - "${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}"
+      - push
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
 
-  # Deploy to Cloud Run
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
-    entrypoint: "gcloud"
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
     args:
-      - "run"
-      - "deploy"
-      - "${_SERVICE_NAME}"
-      - "--image"
-      - "${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}"
-      - "--region"
-      - "${_DEPLOY_REGION}"
-      - "--platform"
-      - "managed"
-      - "--allow-unauthenticated"
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --image
+      - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
+      - --region
+      - ${_DEPLOY_REGION}
+      - --platform
+      - managed
+      - --allow-unauthenticated
 
 images:
-  - "${_AR_HOSTNAME}/${_AR_PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}"
+  - ${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}
 
-# <-- ESTO ARREGLA TU ERROR ACTUAL (logs) -->
+# Esto evita el error que te salió cuando usas service account en el trigger
 options:
   logging: CLOUD_LOGGING_ONLY
