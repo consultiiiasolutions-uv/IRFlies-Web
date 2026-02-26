@@ -35,7 +35,8 @@ steps:
         "--allow-unauthenticated",
         "--cpu", "1",
         "--memory", "256Mi",
-        "--concurrency", "80"
+        "--concurrency", "80",
+        "--service-account", "irflies-api-sa@irflies-uv.iam.gserviceaccount.com"
       ]
 
 images:
