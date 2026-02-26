@@ -7,7 +7,7 @@ import threading
 from typing import List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from google.cloud import storage
 
 from .config import settings
@@ -151,22 +151,19 @@ def _nms_indices(boxes, scores, iou_thresh: float, max_det: int):
 def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     """
     Detecta ROIs (ojos) usando YOLO y devuelve lista de RoiXYXY.
-    Si YOLO está deshabilitado, devuelve [].
+    Alineado con la lógica del escritorio.
     """
     if not settings.yolo_enabled:
         return []
 
-    # Imagen a numpy
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img).convert("RGB")
     w_img, h_img = img.size
     arr = np.array(img)
 
     yolo = _load_yolo_if_needed()
 
-    # max detections (por defecto 2 ojos)
-    max_det = int(os.getenv("IRFLIES_YOLO_MAX_DETECTIONS", "2"))
-
-    # Predict
+    # Igual que escritorio: sin NMS manual extra
     results = yolo.predict(source=arr, conf=float(conf), verbose=False)
     if not results:
         return []
@@ -175,23 +172,12 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     if r0.boxes is None or len(r0.boxes) == 0:
         return []
 
-    # Boxes
-    xyxy = r0.boxes.xyxy.cpu().numpy()  # (N,4)
-    scores = r0.boxes.conf.cpu().numpy() if r0.boxes.conf is not None else np.ones((xyxy.shape[0],), dtype=np.float32)
-    clss = r0.boxes.cls.cpu().numpy().astype(int) if r0.boxes.cls is not None else np.zeros((xyxy.shape[0],), dtype=int)
-
-    # nombres de clase (si existen)
     names = getattr(r0, "names", None) or getattr(yolo, "names", None) or {}
 
-    # ordenar por score desc y tomar top-k
-    iou_thresh = float(os.getenv("IRFLIES_YOLO_IOU_THRESH", "0.6"))
-    idxs = _nms_indices(xyxy, scores, iou_thresh=iou_thresh, max_det=max_det)
-
     rois: List[RoiXYXY] = []
-    for i in idxs:
-        x1, y1, x2, y2 = xyxy[i].tolist()
+    for box in r0.boxes:
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-        # clamp a bounds
         x1 = int(max(0, min(w_img - 1, round(x1))))
         y1 = int(max(0, min(h_img - 1, round(y1))))
         x2 = int(max(0, min(w_img - 1, round(x2))))
@@ -200,13 +186,17 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
         if x2 <= x1 or y2 <= y1:
             continue
 
-        cls_id = int(clss[i])
+        score = float(box.conf[0].item()) if box.conf is not None else 0.0
+        cls_id = int(box.cls[0].item()) if box.cls is not None else 0
         label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
 
         rois.append(
             RoiXYXY(
-                x1=x1, y1=y1, x2=x2, y2=y2,
-                score=float(scores[i]),
+                x1=x1,
+                y1=y1,
+                x2=x2,
+                y2=y2,
+                score=score,
                 label=str(label),
             )
         )
