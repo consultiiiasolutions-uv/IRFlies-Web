@@ -573,14 +573,19 @@ function normalizeDetectResponse(j) {
   const arr = j?.rois || j?.boxes || j?.detections || [];
   if (!Array.isArray(arr)) return [];
 
-  return arr.map((r) => ({
-    x1: Number(r.x1),
-    y1: Number(r.y1),
-    x2: Number(r.x2),
-    y2: Number(r.y2),
-    score: r.score != null ? Number(r.score) : null,
-    label: r.label ?? "eyes",
-  }));
+  const thr = Number(confIn.value || 0.25);
+
+  return arr
+    .map((r) => ({
+      x1: Number(r.x1),
+      y1: Number(r.y1),
+      x2: Number(r.x2),
+      y2: Number(r.y2),
+      score: r.score != null ? Number(r.score) : null,
+      label: r.label ?? "eyes",
+    }))
+    .filter((r) => r.score == null || r.score >= thr)
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 }
 
 // 1) Detectar solamente
