@@ -3,6 +3,7 @@ from fastapi.responses import Response, JSONResponse
 from typing import Optional
 import io
 from PIL import Image
+import json
 
 from .config import settings
 from .schemas import (
@@ -51,8 +52,6 @@ async def preview_upload(
     file: UploadFile = File(...),
     rois_json: str = Form(default="[]"),  # JSON string list[{"x1":..,"y1":..,"x2":..,"y2":..}]
 ):
-    import json
-
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
 
@@ -114,34 +113,61 @@ def classify_gcs(payload: ClassifyGcsRequest):
 
 
 # --------------------
-# Pipeline (detect -> crop -> classify)  [BATCH]
+# Pipeline (detect -> crop -> classify)  [BATCH + manual ROIs]
 # --------------------
 @app.post("/v1/pipeline/upload", response_model=PipelineResponse)
 async def pipeline_upload(
     file: UploadFile = File(...),
     conf: float = Form(default=0.03),
+    rois_json: str = Form(default=""),  # modo manual
 ):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
 
-    rois = detect_rois(image_bytes, conf=conf)
+    # 1) Decide ROIs: manual (rois_json) o YOLO
+    if rois_json and rois_json.strip() and rois_json.strip() != "[]":
+        try:
+            rois_raw = json.loads(rois_json)
+            rois = [RoiXYXY(**r) for r in (rois_raw or [])]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"rois_json inválido: {e}")
+    else:
+        rois = detect_rois(image_bytes, conf=conf)
+
     if not rois:
         return PipelineResponse(rois=[], predictions=[])
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    w_img, h_img = img.size
 
-    # 1) crops list
-    crops = [img.crop((r.x1, r.y1, r.x2, r.y2)) for r in rois]
+    invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
+    predictions: list[RoiPrediction] = [None] * len(rois)  # type: ignore
+    crops = []
+    crop_map = []
 
-    # 2) one batch inference
-    cls_list = classify_crops_batch(crops)
+    for i, roi in enumerate(rois):
+        x1 = max(0, min(w_img - 1, int(roi.x1)))
+        y1 = max(0, min(h_img - 1, int(roi.y1)))
+        x2 = max(0, min(w_img, int(roi.x2)))
+        y2 = max(0, min(h_img, int(roi.y2)))
 
-    # 3) pack response
-    preds = []
-    for i, (roi, cls) in enumerate(zip(rois, cls_list)):
-        preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
+        roi_clamped = RoiXYXY(x1=x1, y1=y1, x2=x2, y2=y2, score=roi.score, label=roi.label)
 
-    return PipelineResponse(rois=rois, predictions=preds)
+        if x2 <= x1 or y2 <= y1:
+            predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
+            continue
+
+        crops.append(img.crop((x1, y1, x2, y2)))
+        crop_map.append(i)
+        predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
+
+    if crops:
+        cls_list = classify_crops_batch(crops)
+        for k, cls in enumerate(cls_list):
+            i = crop_map[k]
+            predictions[i].classification = cls  # type: ignore
+
+    return PipelineResponse(rois=rois, predictions=predictions)
 
 
 @app.post("/v1/pipeline/gcs", response_model=PipelineResponse)
@@ -149,20 +175,42 @@ def pipeline_gcs(payload: PipelineGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
 
-    rois = detect_rois(image_bytes, conf=payload.conf)
+    rois = payload.rois if getattr(payload, "rois", None) else detect_rois(image_bytes, conf=payload.conf)
+
     if not rois:
         return PipelineResponse(rois=[], predictions=[])
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    w_img, h_img = img.size
 
-    crops = [img.crop((r.x1, r.y1, r.x2, r.y2)) for r in rois]
-    cls_list = classify_crops_batch(crops)
+    invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
+    predictions: list[RoiPrediction] = [None] * len(rois)  # type: ignore
+    crops = []
+    crop_map = []
 
-    preds = []
-    for i, (roi, cls) in enumerate(zip(rois, cls_list)):
-        preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
+    for i, roi in enumerate(rois):
+        x1 = max(0, min(w_img - 1, int(roi.x1)))
+        y1 = max(0, min(h_img - 1, int(roi.y1)))
+        x2 = max(0, min(w_img, int(roi.x2)))
+        y2 = max(0, min(h_img, int(roi.y2)))
 
-    return PipelineResponse(rois=rois, predictions=preds)
+        roi_clamped = RoiXYXY(x1=x1, y1=y1, x2=x2, y2=y2, score=roi.score, label=roi.label)
+
+        if x2 <= x1 or y2 <= y1:
+            predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
+            continue
+
+        crops.append(img.crop((x1, y1, x2, y2)))
+        crop_map.append(i)
+        predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
+
+    if crops:
+        cls_list = classify_crops_batch(crops)
+        for k, cls in enumerate(cls_list):
+            i = crop_map[k]
+            predictions[i].classification = cls  # type: ignore
+
+    return PipelineResponse(rois=rois, predictions=predictions)
 
 
 # --------------------
