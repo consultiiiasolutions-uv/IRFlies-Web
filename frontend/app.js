@@ -41,6 +41,8 @@ function draw() {
   boxes.innerHTML = "";
   roiList.innerHTML = "";
 
+  if (!img.naturalWidth || !img.naturalHeight) return;
+
   const { rect } = getScale();
   const dispW = rect.width;
   const dispH = rect.height;
@@ -68,7 +70,9 @@ function draw() {
       const c = lastResponse.predictions[idx].classification;
       clsTag = ` | ${c.label} (${(c.score ?? 0).toFixed(3)})`;
     }
-    const yoloTag = (r.label ? r.label : "manual") + (r.score != null ? ` ${(r.score).toFixed(3)}` : "");
+    const yoloTag =
+      (r.label ? r.label : "manual") +
+      (r.score != null ? ` ${(r.score).toFixed(3)}` : "");
     tag.textContent = `#${idx} ${yoloTag}${clsTag}`;
 
     el.appendChild(tag);
@@ -113,17 +117,24 @@ fileIn.addEventListener("change", () => {
   img.src = url;
 });
 
-// --- ROI draw (click & drag) ---
+// --- ROI draw (Pointer Events: móvil + desktop) ---
 let drawing = false;
 let start = null;
 
-stage.addEventListener("mousedown", (e) => {
+// Evita que el navegador haga scroll/zoom mientras dibujas encima de la imagen
+stage.style.touchAction = "none";
+
+stage.addEventListener("pointerdown", (e) => {
   if (!img.src) return;
+  // Solo botón principal o touch/stylus
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+
   drawing = true;
   start = { x: e.clientX, y: e.clientY };
+  stage.setPointerCapture(e.pointerId);
 });
 
-window.addEventListener("mouseup", (e) => {
+stage.addEventListener("pointerup", (e) => {
   if (!drawing || !start) return;
   drawing = false;
 
@@ -145,6 +156,11 @@ window.addEventListener("mouseup", (e) => {
     pretty(lastResponse);
     draw();
   }
+  start = null;
+});
+
+stage.addEventListener("pointercancel", () => {
+  drawing = false;
   start = null;
 });
 
@@ -171,7 +187,11 @@ async function postForm(url, formData) {
   const r = await fetch(url, { method: "POST", body: formData });
   const text = await r.text();
   let j;
-  try { j = JSON.parse(text); } catch { throw new Error(`Non-JSON: ${text.slice(0,200)}`); }
+  try {
+    j = JSON.parse(text);
+  } catch {
+    throw new Error(`Non-JSON: ${text.slice(0, 200)}`);
+  }
   if (!r.ok) throw new Error(j?.detail ?? `HTTP ${r.status}`);
   return j;
 }
@@ -206,13 +226,19 @@ manualBtn.addEventListener("click", async () => {
   try {
     const fd = new FormData();
     fd.append("file", f);
-    fd.append("rois_json", JSON.stringify(rois.map(r => ({
-      x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2
-    }))));
-    // conf no hace falta en modo manual (pero no estorba si lo mandas)
+    fd.append(
+      "rois_json",
+      JSON.stringify(
+        rois.map((r) => ({
+          x1: r.x1,
+          y1: r.y1,
+          x2: r.x2,
+          y2: r.y2,
+        }))
+      )
+    );
     const j = await postForm(`${apiBase.value}/v1/pipeline/upload`, fd);
     lastResponse = j;
-    // rois regresan sin score/label (normal). Conserva los tuyos:
     pretty(j);
     draw();
   } catch (e) {
