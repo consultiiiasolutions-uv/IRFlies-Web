@@ -20,6 +20,10 @@ const deleteBtn = $("deleteBtn");
 const clearBtn = $("clearBtn");
 const clearHistoryBtn = $("clearHistoryBtn");
 
+const prevImageBtn = $("prevImageBtn");
+const nextImageBtn = $("nextImageBtn");
+const imagePosition = $("imagePosition");
+
 const msg = $("msg");
 const modeOut = $("modeOut");
 const roiCountOut = $("roiCountOut");
@@ -42,6 +46,11 @@ let mode = "select"; // select | draw
 let pointerState = null; // draw | move | resize
 let previewRect = null;
 
+// Archivos seleccionados y navegación
+let selectedFiles = [];
+let currentFileIndex = -1;
+let currentObjectUrl = null;
+
 // Historial en sesión
 let sessionHistory = [];
 
@@ -50,6 +59,19 @@ const MIN_SIZE = 6;
 // --- Utilidades ---
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function getCurrentFile() {
+  if (currentFileIndex < 0 || currentFileIndex >= selectedFiles.length) return null;
+  return selectedFiles[currentFileIndex];
+}
+
+function resetImageState() {
+  rois = [];
+  lastResponse = null;
+  selectedIdx = null;
+  previewRect = null;
+  pointerState = null;
 }
 
 function setMessage(text, type = "info") {
@@ -71,6 +93,9 @@ function setBusy(b) {
   clearBtn.disabled = b;
   deleteBtn.disabled = b || selectedIdx == null;
   clearHistoryBtn.disabled = b;
+  prevImageBtn.disabled = b || currentFileIndex <= 0;
+  nextImageBtn.disabled = b || currentFileIndex < 0 || currentFileIndex >= selectedFiles.length - 1;
+  fileIn.disabled = b;
 }
 
 function setMode(nextMode) {
@@ -82,8 +107,19 @@ function setMode(nextMode) {
 
 function updateTopInfo() {
   roiCountOut.textContent = `ROIs: ${rois.length}`;
-  fileOut.textContent = fileIn.files?.[0]?.name || "Sin imagen cargada";
+
+  const currentFile = getCurrentFile();
+  fileOut.textContent = currentFile ? currentFile.name : "Sin imagen cargada";
+
+  if (selectedFiles.length > 0 && currentFileIndex >= 0) {
+    imagePosition.textContent = `Imagen ${currentFileIndex + 1} de ${selectedFiles.length}`;
+  } else {
+    imagePosition.textContent = "Sin imágenes cargadas";
+  }
+
   deleteBtn.disabled = selectedIdx == null;
+  prevImageBtn.disabled = currentFileIndex <= 0;
+  nextImageBtn.disabled = currentFileIndex < 0 || currentFileIndex >= selectedFiles.length - 1;
 }
 
 function normalizeBox(r) {
@@ -365,7 +401,8 @@ function ordinalImageLabel(n) {
 function addCurrentResultToHistory() {
   if (!lastResponse?.predictions?.length) return;
 
-  const fileName = fileIn.files?.[0]?.name || "Sin nombre";
+  const currentFile = getCurrentFile();
+  const fileName = currentFile?.name || "Sin nombre";
   const roiCount = rois.length;
   const domClass = dominantClass();
   const avgScore = meanScore();
@@ -438,22 +475,58 @@ async function pingBackend(showUserMessage = false) {
   }
 }
 
-// --- Archivo ---
-fileIn.addEventListener("change", () => {
-  const f = fileIn.files?.[0];
-  if (!f) return;
+function loadCurrentImage() {
+  const currentFile = getCurrentFile();
 
-  const url = URL.createObjectURL(f);
-  img.onload = () => {
-    rois = [];
-    lastResponse = null;
-    selectedIdx = null;
-    previewRect = null;
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = null;
+  }
+
+  resetImageState();
+
+  if (!currentFile) {
+    img.removeAttribute("src");
     draw();
     updateTopInfo();
-    setMessage("Imagen cargada. Puedes detectar ojos o dibujar ROIs manualmente.", "info");
+    setMessage("No hay imagen seleccionada.", "info");
+    return;
+  }
+
+  currentObjectUrl = URL.createObjectURL(currentFile);
+
+  img.onload = () => {
+    draw();
+    updateTopInfo();
+    setMessage(`Imagen cargada: ${currentFile.name}. Puedes detectar ojos o dibujar ROIs manualmente.`, "info");
   };
-  img.src = url;
+
+  img.src = currentObjectUrl;
+}
+
+function goToImage(index) {
+  if (index < 0 || index >= selectedFiles.length) return;
+  currentFileIndex = index;
+  loadCurrentImage();
+}
+
+// --- Archivo ---
+fileIn.addEventListener("change", () => {
+  selectedFiles = Array.from(fileIn.files || []);
+  currentFileIndex = selectedFiles.length ? 0 : -1;
+  loadCurrentImage();
+});
+
+prevImageBtn.addEventListener("click", () => {
+  if (currentFileIndex > 0) {
+    goToImage(currentFileIndex - 1);
+  }
+});
+
+nextImageBtn.addEventListener("click", () => {
+  if (currentFileIndex < selectedFiles.length - 1) {
+    goToImage(currentFileIndex + 1);
+  }
 });
 
 selectBtn.addEventListener("click", () => setMode("select"));
@@ -466,7 +539,7 @@ clearBtn.addEventListener("click", () => {
   previewRect = null;
   draw();
   updateTopInfo();
-  setMessage("Se limpiaron todos los ROIs.", "info");
+  setMessage("Se limpiaron todos los ROIs de la imagen actual.", "info");
 });
 
 deleteBtn.addEventListener("click", () => {
@@ -699,8 +772,8 @@ function normalizeDetectResponse(j) {
 
 // 1) Detectar solamente
 detectBtn.addEventListener("click", async () => {
-  const f = fileIn.files?.[0];
-  if (!f) return alert("Sube una imagen primero.");
+  const f = getCurrentFile();
+  if (!f) return alert("Sube una o varias imágenes primero.");
 
   setBusy(true);
   try {
@@ -732,8 +805,8 @@ detectBtn.addEventListener("click", async () => {
 
 // 2) Clasificar ROIs actuales
 classifyBtn.addEventListener("click", async () => {
-  const f = fileIn.files?.[0];
-  if (!f) return alert("Sube una imagen primero.");
+  const f = getCurrentFile();
+  if (!f) return alert("Sube una o varias imágenes primero.");
   if (!rois.length) return alert("No hay ROIs para clasificar.");
 
   setBusy(true);
