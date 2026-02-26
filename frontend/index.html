@@ -14,23 +14,28 @@
         <h1>Detección y clasificación de ojos</h1>
         <p class="heroText">
           Carga una imagen, detecta ojos automáticamente, corrige los ROIs si hace falta
-          y clasifica después. El flujo queda separado y es usable tanto en escritorio como en celular.
+          y clasifica después. El historial de resultados se conserva durante toda la sesión.
         </p>
       </div>
+
+      <div class="heroSide">
+        <span id="backendStatus" class="statusChip muted">Backend: verificando</span>
+
+        <details class="techTools">
+          <summary>Herramientas técnicas</summary>
+          <div class="techBody">
+            <div class="techRow">
+              <label for="apiBase">API Base URL</label>
+              <input id="apiBase" type="text" />
+            </div>
+            <div class="techRow">
+              <button id="pingBtn" class="smallBtn">Verificar backend</button>
+              <span id="pingOut" class="muted smallText">Sin verificar</span>
+            </div>
+          </div>
+        </details>
+      </div>
     </header>
-
-    <section class="panel">
-      <div class="sectionHead">
-        <h2>Conexión</h2>
-      </div>
-
-      <div class="row">
-        <label for="apiBase">API Base URL</label>
-        <input id="apiBase" type="text" />
-        <button id="pingBtn">Verificar backend</button>
-        <span id="pingOut" class="statusChip muted">Sin verificar</span>
-      </div>
-    </section>
 
     <section class="panel">
       <div class="sectionHead">
@@ -40,7 +45,7 @@
       <div class="row">
         <input id="file" type="file" accept="image/*" />
         <label class="muted" for="conf">conf</label>
-        <input id="conf" type="number" step="0.01" min="0" max="1" value="0.01" style="width:90px" />
+        <input id="conf" type="number" step="0.01" min="0" max="1" value="0.25" style="width:90px" />
       </div>
 
       <div class="row actions">
@@ -113,7 +118,7 @@
 
     <section class="panel">
       <div class="sectionHead">
-        <h2>Resultados</h2>
+        <h2>Resultados actuales</h2>
       </div>
 
       <div class="tableWrap">
@@ -130,6 +135,33 @@
           <tbody id="resultsBody">
             <tr>
               <td colspan="5" class="emptyCell">Todavía no hay clasificación.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="sectionHead historyHead">
+        <h2>Historial de sesión</h2>
+        <button id="clearHistoryBtn" class="ghost smallBtn">Limpiar historial</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="resultsTable">
+          <thead>
+            <tr>
+              <th>Imagen</th>
+              <th>Archivo</th>
+              <th>ROIs</th>
+              <th>Clase dominante</th>
+              <th>Score medio</th>
+              <th>Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr>
+              <td colspan="6" class="emptyCell">Todavía no hay resultados guardados en esta sesión.</td>
             </tr>
           </tbody>
         </table>
