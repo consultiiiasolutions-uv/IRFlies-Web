@@ -47,3 +47,18 @@ class SignedUploadUrlResponse(BaseModel):
     bucket: str
     object_name: str
     expires_in_seconds: int
+
+class PipelineGcsRequest(BaseModel):
+    gcs_uri: str
+    conf: float = 0.03
+
+
+class RoiPrediction(BaseModel):
+    roi_index: int
+    roi: RoiXYXY
+    classification: ClassifyResponse
+
+
+class PipelineResponse(BaseModel):
+    rois: List[RoiXYXY] = Field(default_factory=list)
+    predictions: List[RoiPrediction] = Field(default_factory=list)
