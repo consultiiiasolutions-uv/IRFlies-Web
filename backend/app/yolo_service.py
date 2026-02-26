@@ -1,4 +1,3 @@
-# backend/app/yolo_service.py
 import io
 import os
 import logging
@@ -42,14 +41,10 @@ def _parse_gcs_uri(uri: str) -> Tuple[str, str]:
 def _cache_path_for_uri(model_uri: str) -> str:
     base_dir = "/tmp/irflies_models"
     os.makedirs(base_dir, exist_ok=True)
-    # nombre fijo para YOLO (un solo modelo)
     return os.path.join(base_dir, "eyes_yolo.pt")
 
 
 def _ensure_weights_local(model_uri: str) -> str:
-    """
-    Descarga el .pt desde GCS de forma atómica y con verificación de tamaño.
-    """
     if not model_uri.startswith("gs://"):
         if not os.path.exists(model_uri) or os.path.getsize(model_uri) <= 0:
             raise RuntimeError(f"Modelo YOLO local inválido: {model_uri}")
@@ -63,11 +58,9 @@ def _ensure_weights_local(model_uri: str) -> str:
     blob.reload()
     expected = int(blob.size) if blob.size is not None else None
 
-    # si ya existe y tamaño coincide, ok
     if os.path.exists(local_path) and expected and os.path.getsize(local_path) == expected:
         return local_path
 
-    # descarga atómica
     with tempfile.NamedTemporaryFile(prefix="dl_", suffix=".pt", dir=os.path.dirname(local_path), delete=False) as tmp:
         tmp_path = tmp.name
 
@@ -92,9 +85,6 @@ def _ensure_weights_local(model_uri: str) -> str:
 
 
 def _load_yolo_if_needed():
-    """
-    Carga YOLO una sola vez por instancia (lazy).
-    """
     global _YOLO
     if _YOLO is not None:
         return _YOLO
@@ -103,12 +93,11 @@ def _load_yolo_if_needed():
         if _YOLO is not None:
             return _YOLO
 
-        # Import aquí para no penalizar startup si YOLO está apagado
-        from ultralytics import YOLO  # noqa: WPS433
+        from ultralytics import YOLO
 
         model_uri = (getattr(settings, "yolo_model_uri", None) or os.getenv("IRFLIES_YOLO_MODEL_URI", "")).strip()
         if not model_uri:
-            raise RuntimeError("Falta IRFLIES_YOLO_MODEL_URI (gs://.../eyes_yolov8n_best.pt)")
+            raise RuntimeError("Falta IRFLIES_YOLO_MODEL_URI")
 
         local_path = _ensure_weights_local(model_uri)
         log.info("Cargando YOLO desde %s", local_path)
@@ -116,42 +105,15 @@ def _load_yolo_if_needed():
         _YOLO = YOLO(local_path)
         return _YOLO
 
-def _iou(a, b) -> float:
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    inter_x1 = max(ax1, bx1)
-    inter_y1 = max(ay1, by1)
-    inter_x2 = min(ax2, bx2)
-    inter_y2 = min(ay2, by2)
-    iw = max(0.0, inter_x2 - inter_x1)
-    ih = max(0.0, inter_y2 - inter_y1)
-    inter = iw * ih
-    if inter <= 0.0:
-        return 0.0
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
-    union = area_a + area_b - inter
-    return float(inter / union) if union > 0 else 0.0
-
-
-def _nms_indices(boxes, scores, iou_thresh: float, max_det: int):
-    # boxes: (N,4) float
-    order = list(np.argsort(-scores))
-    keep = []
-    while order and len(keep) < max_det:
-        i = order.pop(0)
-        keep.append(i)
-        new_order = []
-        for j in order:
-            if _iou(boxes[i], boxes[j]) < iou_thresh:
-                new_order.append(j)
-        order = new_order
-    return keep
 
 def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     """
-    Detecta ROIs (ojos) usando YOLO y devuelve lista de RoiXYXY.
-    Alineado con la lógica del escritorio.
+    Detección alineada con la lógica del escritorio:
+    - EXIF transpose
+    - RGB
+    - guardar temporal
+    - source=path
+    - sin NMS manual extra
     """
     if not settings.yolo_enabled:
         return []
@@ -159,46 +121,74 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     img = Image.open(io.BytesIO(image_bytes))
     img = ImageOps.exif_transpose(img).convert("RGB")
     w_img, h_img = img.size
-    arr = np.array(img)
 
     yolo = _load_yolo_if_needed()
 
-    # Igual que escritorio: sin NMS manual extra
-    results = yolo.predict(source=arr, conf=float(conf), verbose=False)
-    if not results:
-        return []
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp_path = tmp.name
 
-    r0 = results[0]
-    if r0.boxes is None or len(r0.boxes) == 0:
-        return []
+    try:
+        img.save(tmp_path)
 
-    names = getattr(r0, "names", None) or getattr(yolo, "names", None) or {}
+        log.info("[yolo] predict conf=%.4f tmp_path=%s size=(%d,%d)", conf, tmp_path, w_img, h_img)
 
-    rois: List[RoiXYXY] = []
-    for box in r0.boxes:
-        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        res = yolo.predict(
+            source=tmp_path,
+            conf=float(conf),
+            verbose=False,
+        )[0]
 
-        x1 = int(max(0, min(w_img - 1, round(x1))))
-        y1 = int(max(0, min(h_img - 1, round(y1))))
-        x2 = int(max(0, min(w_img - 1, round(x2))))
-        y2 = int(max(0, min(h_img - 1, round(y2))))
+        rois: List[RoiXYXY] = []
 
-        if x2 <= x1 or y2 <= y1:
-            continue
+        if res.boxes is None or len(res.boxes) == 0:
+            log.info("[yolo] sin detecciones")
+            return []
 
-        score = float(box.conf[0].item()) if box.conf is not None else 0.0
-        cls_id = int(box.cls[0].item()) if box.cls is not None else 0
-        label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
+        names = getattr(res, "names", None) or getattr(yolo, "names", None) or {}
 
-        rois.append(
-            RoiXYXY(
-                x1=x1,
-                y1=y1,
-                x2=x2,
-                y2=y2,
-                score=score,
-                label=str(label),
+        for box in res.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+            x1 = int(max(0, min(w_img - 1, round(x1))))
+            y1 = int(max(0, min(h_img - 1, round(y1))))
+            x2 = int(max(0, min(w_img - 1, round(x2))))
+            y2 = int(max(0, min(h_img - 1, round(y2))))
+
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            score = float(box.conf[0].item()) if box.conf is not None else 0.0
+            cls_id = int(box.cls[0].item()) if box.cls is not None else 0
+            label = names.get(cls_id, str(cls_id)) if isinstance(names, dict) else str(cls_id)
+
+            rois.append(
+                RoiXYXY(
+                    x1=x1,
+                    y1=y1,
+                    x2=x2,
+                    y2=y2,
+                    score=score,
+                    label=str(label),
+                )
             )
+
+        rois.sort(key=lambda r: (r.score if r.score is not None else -1.0), reverse=True)
+
+        log.info(
+            "[yolo] detecciones=%s",
+            [
+                {"x1": r.x1, "y1": r.y1, "x2": r.x2, "y2": r.y2, "score": r.score, "label": r.label}
+                for r in rois
+            ],
         )
 
-    return rois
+        # Si quieres solo la mejor detección:
+        max_det = int(os.getenv("IRFLIES_YOLO_MAX_DETECTIONS", "1"))
+        return rois[:max_det]
+
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
