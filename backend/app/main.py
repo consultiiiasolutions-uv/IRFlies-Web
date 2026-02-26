@@ -88,7 +88,7 @@ def preview_gcs(payload: PreviewGcsRequest):
 # Detect (upload / GCS)
 # --------------------
 @app.post("/v1/detect/upload", response_model=DetectResponse)
-async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.03)):
+async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.30)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
     rois = detect_rois(image_bytes, conf=conf)
@@ -126,7 +126,7 @@ def classify_gcs(payload: ClassifyGcsRequest):
 @app.post("/v1/pipeline/upload", response_model=PipelineResponse)
 async def pipeline_upload(
     file: UploadFile = File(...),
-    conf: float = Form(default=0.03),
+    conf: float = Form(default=0.30),
     rois_json: str = Form(default=""),  # modo manual
 ):
     image_bytes = await file.read()
