@@ -10,7 +10,8 @@ import threading
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
+from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as preprocess_enetv2
 from google.cloud import storage
 import tensorflow as tf
 
@@ -243,17 +244,27 @@ def _load_model_if_needed() -> Tuple[tf.keras.Model, Tuple[int, int], Optional[L
         log.info("Modelo cargado OK. input_hw=%s labels=%s", _MODEL_HW, _LABELS)
         return _MODEL, _MODEL_HW, _LABELS
 
+def _softmax_np(x: np.ndarray) -> np.ndarray:
+    x = np.asarray(x, dtype=np.float32)
+    x = x - np.max(x, axis=-1, keepdims=True)
+    ex = np.exp(x)
+    return ex / np.sum(ex, axis=-1, keepdims=True)
+
+
+def _preprocess_pil(img: Image.Image, hw: Tuple[int, int]) -> np.ndarray:
+    h, w = hw
+
+    # Igual que en PySide6
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img = img.resize((w, h), Image.Resampling.BILINEAR)  # PIL usa (width, height)
+
+    arr = np.asarray(img, dtype=np.float32)  # [H,W,3] en [0..255]
+    arr = preprocess_enetv2(arr)             # Igual que desktop
+    return arr.astype(np.float32)
 
 def _preprocess(image_bytes: bytes, hw: Tuple[int, int]) -> np.ndarray:
-    h, w = hw
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    arr = np.array(img)  # (H,W,3) uint8
-
-    arr_tf = tf.convert_to_tensor(arr)
-    arr_tf = tf.image.resize(arr_tf, (h, w), method="bilinear")
-    arr = arr_tf.numpy().astype(np.float32)
-
-    arr = arr / 255.0
+    img = Image.open(io.BytesIO(image_bytes))
+    arr = _preprocess_pil(img, hw)
     x = np.expand_dims(arr, axis=0)  # (1,h,w,3)
     return x
 
@@ -265,20 +276,20 @@ def classify_image(image_bytes: bytes) -> ClassifyResponse:
     model, hw, labels = _load_model_if_needed()
     x = _preprocess(image_bytes, hw)
 
-    pred = model.predict(x, verbose=0)
-    if isinstance(pred, list):
-        pred = pred[0]
-    pred = np.array(pred)
+    # Igual que en escritorio
+    logits_or_probs = model(x, training=False).numpy()
+
+    if isinstance(logits_or_probs, list):
+        logits_or_probs = logits_or_probs[0]
+
+    pred = np.array(logits_or_probs)
 
     if pred.ndim == 2 and pred.shape[0] == 1:
         pred = pred[0]
 
     if pred.ndim == 1 and pred.size > 1:
-        vec = pred.astype(np.float32)
-
-        s = float(np.sum(vec))
-        if (vec.min() < 0.0) or (vec.max() > 1.0 + 1e-3) or (abs(s - 1.0) > 1.0e-2):
-            vec = tf.nn.softmax(vec).numpy().astype(np.float32)
+        # Igual que en escritorio: softmax siempre
+        vec = _softmax_np(pred).astype(np.float32)
 
         idx = int(np.argmax(vec))
         score = float(vec[idx])
@@ -291,7 +302,6 @@ def classify_image(image_bytes: bytes) -> ClassifyResponse:
         probs: Dict[str, float] = {name(i): float(vec[i]) for i in range(vec.size)}
         return ClassifyResponse(label=name(idx), score=score, probs=probs)
 
-    # fallback “regresión” o salida escalar
     try:
         val = float(np.ravel(pred)[0])
     except Exception:
@@ -308,27 +318,24 @@ def classify_crops_batch(crops_rgb: List[Image.Image]) -> List[ClassifyResponse]
         return [ClassifyResponse(label="not_configured", score=0.0, probs={}) for _ in crops_rgb]
 
     model, hw, labels = _load_model_if_needed()
-    h, w = hw
 
-    # Preprocess batch
     xs = []
     for img in crops_rgb:
-        img = img.convert("RGB")
-        arr = np.array(img)  # uint8
-        arr_tf = tf.convert_to_tensor(arr)
-        arr_tf = tf.image.resize(arr_tf, (h, w), method="bilinear")
-        arr = arr_tf.numpy().astype(np.float32) / 255.0
+        arr = _preprocess_pil(img, hw)
         xs.append(arr)
 
     if not xs:
         return []
 
-    x = np.stack(xs, axis=0)  # (N,h,w,3)
+    x = np.stack(xs, axis=0).astype(np.float32)  # (N,h,w,3)
 
-    pred = model.predict(x, verbose=0)
-    if isinstance(pred, list):
-        pred = pred[0]
-    pred = np.array(pred)
+    # Igual que en escritorio
+    logits_or_probs = model(x, training=False).numpy()
+
+    if isinstance(logits_or_probs, list):
+        logits_or_probs = logits_or_probs[0]
+
+    pred = np.array(logits_or_probs)
 
     def name(i: int) -> str:
         if labels and 0 <= i < len(labels):
@@ -338,14 +345,14 @@ def classify_crops_batch(crops_rgb: List[Image.Image]) -> List[ClassifyResponse]
     out: List[ClassifyResponse] = []
     for row in pred:
         row = np.array(row).astype(np.float32).ravel()
-        if row.size > 1:
-            s = float(np.sum(row))
-            if (row.min() < 0.0) or (row.max() > 1.0 + 1e-3) or (abs(s - 1.0) > 1.0e-2):
-                row = tf.nn.softmax(row).numpy().astype(np.float32)
 
-            idx = int(np.argmax(row))
-            score = float(row[idx])
-            probs = {name(i): float(row[i]) for i in range(row.size)}
+        if row.size > 1:
+            # Igual que en escritorio: softmax siempre
+            row_probs = _softmax_np(row).astype(np.float32)
+
+            idx = int(np.argmax(row_probs))
+            score = float(row_probs[idx])
+            probs = {name(i): float(row_probs[i]) for i in range(row_probs.size)}
             out.append(ClassifyResponse(label=name(idx), score=score, probs=probs))
         else:
             val = float(row[0]) if row.size == 1 else 0.0
