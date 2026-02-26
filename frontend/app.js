@@ -51,14 +51,31 @@ let selectedFiles = [];
 let currentFileIndex = -1;
 let currentObjectUrl = null;
 
-// Historial en sesión
+// Estado por imagen en la sesión actual
+// imageStates[i] = { rois, lastResponse, selectedIdx }
+let imageStates = [];
+
+// Historial acumulado de sesión
 let sessionHistory = [];
 
 const MIN_SIZE = 6;
 
-// --- Utilidades ---
+// --- Utilidades generales ---
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+function deepClone(obj) {
+  if (obj == null) return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
+function emptyImageState() {
+  return {
+    rois: [],
+    lastResponse: null,
+    selectedIdx: null,
+  };
 }
 
 function getCurrentFile() {
@@ -66,7 +83,33 @@ function getCurrentFile() {
   return selectedFiles[currentFileIndex];
 }
 
-function resetImageState() {
+function getCurrentImageState() {
+  if (currentFileIndex < 0 || currentFileIndex >= imageStates.length) return null;
+  return imageStates[currentFileIndex];
+}
+
+function saveCurrentImageState() {
+  if (currentFileIndex < 0 || currentFileIndex >= imageStates.length) return;
+
+  imageStates[currentFileIndex] = {
+    rois: deepClone(rois),
+    lastResponse: deepClone(lastResponse),
+    selectedIdx: selectedIdx,
+  };
+}
+
+function restoreCurrentImageState() {
+  const state = getCurrentImageState() || emptyImageState();
+
+  rois = deepClone(state.rois) || [];
+  lastResponse = deepClone(state.lastResponse);
+  selectedIdx = state.selectedIdx ?? null;
+
+  previewRect = null;
+  pointerState = null;
+}
+
+function resetVisualStateOnly() {
   rois = [];
   lastResponse = null;
   selectedIdx = null;
@@ -269,6 +312,7 @@ function renderRoiList() {
     selBtn.textContent = selectedIdx === idx ? "Seleccionado" : "Seleccionar";
     selBtn.onclick = () => {
       selectedIdx = idx;
+      saveCurrentImageState();
       draw();
       updateTopInfo();
     };
@@ -280,6 +324,7 @@ function renderRoiList() {
       if (selectedIdx === idx) selectedIdx = null;
       if (selectedIdx != null && selectedIdx > idx) selectedIdx -= 1;
       lastResponse = null;
+      saveCurrentImageState();
       draw();
       renderResults();
       updateTopInfo();
@@ -483,9 +528,8 @@ function loadCurrentImage() {
     currentObjectUrl = null;
   }
 
-  resetImageState();
-
   if (!currentFile) {
+    resetVisualStateOnly();
     img.removeAttribute("src");
     draw();
     updateTopInfo();
@@ -493,12 +537,20 @@ function loadCurrentImage() {
     return;
   }
 
+  // Restaurar estado guardado de esta imagen
+  restoreCurrentImageState();
+
   currentObjectUrl = URL.createObjectURL(currentFile);
 
   img.onload = () => {
     draw();
     updateTopInfo();
-    setMessage(`Imagen cargada: ${currentFile.name}. Puedes detectar ojos o dibujar ROIs manualmente.`, "info");
+
+    if (rois.length || lastResponse) {
+      setMessage(`Se restauró el estado guardado de ${currentFile.name}.`, "info");
+    } else {
+      setMessage(`Imagen cargada: ${currentFile.name}. Puedes detectar ojos o dibujar ROIs manualmente.`, "info");
+    }
   };
 
   img.src = currentObjectUrl;
@@ -506,14 +558,23 @@ function loadCurrentImage() {
 
 function goToImage(index) {
   if (index < 0 || index >= selectedFiles.length) return;
+
+  saveCurrentImageState();
   currentFileIndex = index;
   loadCurrentImage();
 }
 
 // --- Archivo ---
 fileIn.addEventListener("change", () => {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = null;
+  }
+
   selectedFiles = Array.from(fileIn.files || []);
+  imageStates = selectedFiles.map(() => emptyImageState());
   currentFileIndex = selectedFiles.length ? 0 : -1;
+
   loadCurrentImage();
 });
 
@@ -537,6 +598,7 @@ clearBtn.addEventListener("click", () => {
   lastResponse = null;
   selectedIdx = null;
   previewRect = null;
+  saveCurrentImageState();
   draw();
   updateTopInfo();
   setMessage("Se limpiaron todos los ROIs de la imagen actual.", "info");
@@ -547,6 +609,7 @@ deleteBtn.addEventListener("click", () => {
   rois.splice(selectedIdx, 1);
   lastResponse = null;
   selectedIdx = null;
+  saveCurrentImageState();
   draw();
   updateTopInfo();
   setMessage("ROI seleccionado eliminado.", "info");
@@ -599,6 +662,7 @@ stage.addEventListener("pointerdown", (e) => {
       pointerId: e.pointerId,
     };
     stage.setPointerCapture(e.pointerId);
+    saveCurrentImageState();
     draw();
     updateTopInfo();
     return;
@@ -617,12 +681,14 @@ stage.addEventListener("pointerdown", (e) => {
       pointerId: e.pointerId,
     };
     stage.setPointerCapture(e.pointerId);
+    saveCurrentImageState();
     draw();
     updateTopInfo();
     return;
   }
 
   selectedIdx = null;
+  saveCurrentImageState();
   draw();
   updateTopInfo();
 });
@@ -723,6 +789,7 @@ stage.addEventListener("pointerup", (e) => {
     stage.releasePointerCapture(e.pointerId);
   } catch (_) {}
 
+  saveCurrentImageState();
   draw();
   updateTopInfo();
 });
@@ -730,6 +797,7 @@ stage.addEventListener("pointerup", (e) => {
 stage.addEventListener("pointercancel", () => {
   pointerState = null;
   previewRect = null;
+  saveCurrentImageState();
   draw();
 });
 
@@ -787,6 +855,7 @@ detectBtn.addEventListener("click", async () => {
     lastResponse = null;
     selectedIdx = rois.length ? 0 : null;
 
+    saveCurrentImageState();
     draw();
     updateTopInfo();
 
@@ -828,6 +897,7 @@ classifyBtn.addEventListener("click", async () => {
     const j = await postForm(`${apiBase.value}/v1/pipeline/upload`, fd);
     lastResponse = j;
 
+    saveCurrentImageState();
     draw();
     updateTopInfo();
     addCurrentResultToHistory();
