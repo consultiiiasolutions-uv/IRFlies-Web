@@ -13,8 +13,9 @@
         <p class="eyebrow">IRFlies-Web</p>
         <h1>Detección y clasificación de ojos</h1>
         <p class="heroText">
-          Carga una imagen, detecta ojos automáticamente, corrige los ROIs si hace falta
-          y clasifica después. El historial de resultados se conserva durante toda la sesión.
+          Carga una o varias imágenes, navega una por una, detecta ojos automáticamente,
+          corrige los ROIs si hace falta y clasifica después. El historial de resultados
+          se conserva durante toda la sesión.
         </p>
       </div>
 
@@ -43,9 +44,15 @@
       </div>
 
       <div class="row">
-        <input id="file" type="file" accept="image/*" />
+        <input id="file" type="file" accept="image/*" multiple />
         <label class="muted" for="conf">conf</label>
         <input id="conf" type="number" step="0.01" min="0" max="1" value="0.25" style="width:90px" />
+      </div>
+
+      <div class="row navRow">
+        <button id="prevImageBtn" class="ghost smallBtn">← Imagen anterior</button>
+        <span id="imagePosition" class="statusChip muted">Sin imágenes cargadas</span>
+        <button id="nextImageBtn" class="ghost smallBtn">Imagen siguiente →</button>
       </div>
 
       <div class="row actions">
@@ -64,7 +71,7 @@
       </div>
 
       <div id="msg" class="msg info">
-        Sube una imagen para comenzar.
+        Sube una o varias imágenes para comenzar.
       </div>
     </section>
 
