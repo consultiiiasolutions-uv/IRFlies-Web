@@ -1,7 +1,7 @@
 substitutions:
   _DEPLOY_REGION: northamerica-south1
   _AR_HOSTNAME: northamerica-south1-docker.pkg.dev
-  _AR_REPOSITORY: irflies
+  _AR_REPOSITORY: irflies-backend
   _SERVICE_NAME: irflies-web
   _IMAGE_NAME: irflies-web
 
