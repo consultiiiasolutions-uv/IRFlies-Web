@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response, JSONResponse
 from typing import Optional
+import io
+from PIL import Image
 
 from .config import settings
 from .schemas import (
@@ -12,12 +14,20 @@ from .schemas import (
     ClassifyResponse,
     SignedUploadUrlRequest,
     SignedUploadUrlResponse,
+    PipelineGcsRequest,
+    PipelineResponse,
+    RoiPrediction,
 )
 from .preview_service import build_preview_png
-from .storage import download_bytes, new_tmp_object_name, generate_v4_signed_upload_url, list_objects, delete_object
+from .storage import (
+    download_bytes,
+    new_tmp_object_name,
+    generate_v4_signed_upload_url,
+    list_objects,
+    delete_object,
+)
 from .yolo_service import detect_rois
 from .classifier_service import classify_image
-
 
 app = FastAPI(title="IRFlies API", version="1.0.0")
 
@@ -68,7 +78,7 @@ def preview_gcs(payload: PreviewGcsRequest):
 
 
 # --------------------
-# Detect (upload / GCS) - stub
+# Detect (upload / GCS)
 # --------------------
 @app.post("/v1/detect/upload", response_model=DetectResponse)
 async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.03)):
@@ -82,7 +92,7 @@ async def detect_upload(file: UploadFile = File(...), conf: float = Form(default
 def detect_gcs(payload: DetectGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-    rois = detect_rois(image_bytes, conf=conf)
+    rois = detect_rois(image_bytes, conf=payload.conf)  # <-- FIX
     return DetectResponse(rois=rois)
 
 
@@ -93,16 +103,64 @@ def detect_gcs(payload: DetectGcsRequest):
 async def classify_upload(file: UploadFile = File(...)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
-    result = classify_image(image_bytes)
-    return result
+    return classify_image(image_bytes)
 
 
 @app.post("/v1/classify/gcs", response_model=ClassifyResponse)
 def classify_gcs(payload: ClassifyGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-    result = classify_image(image_bytes) 
-    return result
+    return classify_image(image_bytes)
+
+
+# --------------------
+# Pipeline (detect -> crop -> classify)
+# --------------------
+@app.post("/v1/pipeline/upload", response_model=PipelineResponse)
+async def pipeline_upload(
+    file: UploadFile = File(...),
+    conf: float = Form(default=0.03),
+):
+    image_bytes = await file.read()
+    _enforce_max_size(image_bytes)
+
+    rois = detect_rois(image_bytes, conf=conf)
+    if not rois:
+        return PipelineResponse(rois=[], predictions=[])
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    preds = []
+    for i, roi in enumerate(rois):
+        crop = img.crop((roi.x1, roi.y1, roi.x2, roi.y2))
+        buf = io.BytesIO()
+        crop.save(buf, format="PNG")
+        cls = classify_image(buf.getvalue())
+        preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
+
+    return PipelineResponse(rois=rois, predictions=preds)
+
+
+@app.post("/v1/pipeline/gcs", response_model=PipelineResponse)
+def pipeline_gcs(payload: PipelineGcsRequest):
+    image_bytes = download_bytes(payload.gcs_uri)
+    _enforce_max_size(image_bytes)
+
+    rois = detect_rois(image_bytes, conf=payload.conf)
+    if not rois:
+        return PipelineResponse(rois=[], predictions=[])
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    preds = []
+    for i, roi in enumerate(rois):
+        crop = img.crop((roi.x1, roi.y1, roi.x2, roi.y2))
+        buf = io.BytesIO()
+        crop.save(buf, format="PNG")
+        cls = classify_image(buf.getvalue())
+        preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
+
+    return PipelineResponse(rois=rois, predictions=preds)
 
 
 # --------------------
@@ -119,7 +177,6 @@ def signed_upload_url(req: SignedUploadUrlRequest):
             ttl_seconds=settings.signed_url_ttl_seconds,
         )
     except Exception as e:
-        # Error típico si falta TokenCreator
         raise HTTPException(status_code=500, detail=f"No pude generar signed URL: {e}")
 
     gcs_uri = f"gs://{settings.tmp_bucket}/{obj}"
