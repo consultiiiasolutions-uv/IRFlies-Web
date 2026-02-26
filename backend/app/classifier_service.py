@@ -298,3 +298,57 @@ def classify_image(image_bytes: bytes) -> ClassifyResponse:
         val = 0.0
 
     return ClassifyResponse(label="value", score=val, probs={})
+
+
+def classify_crops_batch(crops_rgb: List[Image.Image]) -> List[ClassifyResponse]:
+    """
+    Recibe lista de PIL Images (RGB), corre 1 predict batch y devuelve lista de ClassifyResponse.
+    """
+    if not settings.classifier_enabled:
+        return [ClassifyResponse(label="not_configured", score=0.0, probs={}) for _ in crops_rgb]
+
+    model, hw, labels = _load_model_if_needed()
+    h, w = hw
+
+    # Preprocess batch
+    xs = []
+    for img in crops_rgb:
+        img = img.convert("RGB")
+        arr = np.array(img)  # uint8
+        arr_tf = tf.convert_to_tensor(arr)
+        arr_tf = tf.image.resize(arr_tf, (h, w), method="bilinear")
+        arr = arr_tf.numpy().astype(np.float32) / 255.0
+        xs.append(arr)
+
+    if not xs:
+        return []
+
+    x = np.stack(xs, axis=0)  # (N,h,w,3)
+
+    pred = model.predict(x, verbose=0)
+    if isinstance(pred, list):
+        pred = pred[0]
+    pred = np.array(pred)
+
+    def name(i: int) -> str:
+        if labels and 0 <= i < len(labels):
+            return labels[i]
+        return str(i)
+
+    out: List[ClassifyResponse] = []
+    for row in pred:
+        row = np.array(row).astype(np.float32).ravel()
+        if row.size > 1:
+            s = float(np.sum(row))
+            if (row.min() < 0.0) or (row.max() > 1.0 + 1e-3) or (abs(s - 1.0) > 1.0e-2):
+                row = tf.nn.softmax(row).numpy().astype(np.float32)
+
+            idx = int(np.argmax(row))
+            score = float(row[idx])
+            probs = {name(i): float(row[i]) for i in range(row.size)}
+            out.append(ClassifyResponse(label=name(idx), score=score, probs=probs))
+        else:
+            val = float(row[0]) if row.size == 1 else 0.0
+            out.append(ClassifyResponse(label="value", score=val, probs={}))
+
+    return out
