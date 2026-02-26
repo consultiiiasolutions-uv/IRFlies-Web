@@ -3,48 +3,138 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>IRFlies Front MVP</title>
+  <title>IRFlies Web</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="wrap">
-    <h1>IRFlies</h1>
-<!-- Esto es un comentario de una sola línea -->
-    <div class="row">
-      <label>API Base URL</label>
-      <input id="apiBase" type="text" />
-      <button id="pingBtn">/health</button>
-      <span id="pingOut" class="muted"></span>
-    </div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">IRFlies-Web</p>
+        <h1>Detección y clasificación de ojos</h1>
+        <p class="heroText">
+          Carga una imagen, detecta ojos automáticamente, corrige los ROIs si hace falta
+          y clasifica después. El flujo queda separado y es usable tanto en escritorio como en celular.
+        </p>
+      </div>
+    </header>
 
-    <div class="row">
-      <input id="file" type="file" accept="image/*" />
-      <label class="muted">conf</label>
-      <input id="conf" type="number" step="0.01" min="0" max="1" value="0.01" style="width:90px" />
-      <button id="autoBtn">Auto (YOLO + Classify)</button>
-      <button id="manualBtn">Classify ROIs (Manual)</button>
-      <button id="clearBtn" class="ghost">Limpiar ROIs</button>
-    </div>
+    <section class="panel">
+      <div class="sectionHead">
+        <h2>Conexión</h2>
+      </div>
+
+      <div class="row">
+        <label for="apiBase">API Base URL</label>
+        <input id="apiBase" type="text" />
+        <button id="pingBtn">Verificar backend</button>
+        <span id="pingOut" class="statusChip muted">Sin verificar</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="sectionHead">
+        <h2>Imagen y acciones</h2>
+      </div>
+
+      <div class="row">
+        <input id="file" type="file" accept="image/*" />
+        <label class="muted" for="conf">conf</label>
+        <input id="conf" type="number" step="0.01" min="0" max="1" value="0.01" style="width:90px" />
+      </div>
+
+      <div class="row actions">
+        <button id="detectBtn" class="primary">Detectar ojos</button>
+        <button id="classifyBtn" class="accent">Clasificar ROIs</button>
+        <button id="selectBtn">Seleccionar / editar</button>
+        <button id="drawBtn">Dibujar ROI</button>
+        <button id="deleteBtn" class="ghost">Eliminar seleccionado</button>
+        <button id="clearBtn" class="ghost">Limpiar ROIs</button>
+      </div>
+
+      <div class="row infoRow">
+        <span id="modeOut" class="statusChip">Modo: seleccionar</span>
+        <span id="roiCountOut" class="statusChip">ROIs: 0</span>
+        <span id="fileOut" class="statusChip muted">Sin imagen cargada</span>
+      </div>
+
+      <div id="msg" class="msg info">
+        Sube una imagen para comenzar.
+      </div>
+    </section>
 
     <div class="grid">
-      <div class="panel">
+      <section class="panel">
+        <div class="sectionHead">
+          <h2>Imagen</h2>
+        </div>
+
         <div class="imgStage" id="stage">
           <img id="img" alt="preview" />
           <div id="boxes"></div>
         </div>
-        <p class="muted">
-          Dibuja un ROI: click y arrastra sobre la imagen. (Puedes borrar ROIs en la lista).
+
+        <p class="muted helper">
+          En modo dibujar: arrastra sobre la imagen para crear un ROI.
+          En modo seleccionar: toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.
         </p>
-      </div>
+      </section>
 
-      <div class="panel">
-        <h3>ROIs</h3>
-        <div id="roiList" class="list"></div>
+      <section class="sideCol">
+        <section class="panel">
+          <div class="sectionHead">
+            <h2>Resumen</h2>
+          </div>
 
-        <h3>Respuesta</h3>
-        <pre id="out" class="out">{}</pre>
-      </div>
+          <div class="summaryGrid">
+            <div class="summaryCard">
+              <span class="summaryLabel">ROIs actuales</span>
+              <strong id="sumRois">0</strong>
+            </div>
+            <div class="summaryCard">
+              <span class="summaryLabel">Clase dominante</span>
+              <strong id="sumClass">—</strong>
+            </div>
+            <div class="summaryCard">
+              <span class="summaryLabel">Score medio</span>
+              <strong id="sumScore">—</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="sectionHead">
+            <h2>ROIs</h2>
+          </div>
+          <div id="roiList" class="list"></div>
+        </section>
+      </section>
     </div>
+
+    <section class="panel">
+      <div class="sectionHead">
+        <h2>Resultados</h2>
+      </div>
+
+      <div class="tableWrap">
+        <table class="resultsTable">
+          <thead>
+            <tr>
+              <th>ROI</th>
+              <th>Clase</th>
+              <th>Score</th>
+              <th>Probabilidades</th>
+              <th>Coordenadas</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr>
+              <td colspan="5" class="emptyCell">Todavía no hay clasificación.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
   <script src="./app.js"></script>
