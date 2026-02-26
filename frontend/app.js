@@ -10,6 +10,7 @@ const confIn = $("conf");
 
 const pingBtn = $("pingBtn");
 const pingOut = $("pingOut");
+const backendStatus = $("backendStatus");
 
 const detectBtn = $("detectBtn");
 const classifyBtn = $("classifyBtn");
@@ -17,6 +18,7 @@ const selectBtn = $("selectBtn");
 const drawBtn = $("drawBtn");
 const deleteBtn = $("deleteBtn");
 const clearBtn = $("clearBtn");
+const clearHistoryBtn = $("clearHistoryBtn");
 
 const msg = $("msg");
 const modeOut = $("modeOut");
@@ -27,17 +29,21 @@ const sumRois = $("sumRois");
 const sumClass = $("sumClass");
 const sumScore = $("sumScore");
 const resultsBody = $("resultsBody");
+const historyBody = $("historyBody");
 
 // Base actual
 apiBase.value = "https://irflies-api-twfkbbgmxa-pv.a.run.app";
 
-let rois = []; // [{x1,y1,x2,y2,score,label}]
+let rois = [];
 let lastResponse = null;
 let selectedIdx = null;
 let mode = "select"; // select | draw
 
 let pointerState = null; // draw | move | resize
 let previewRect = null;
+
+// Historial en sesión
+let sessionHistory = [];
 
 const MIN_SIZE = 6;
 
@@ -64,6 +70,7 @@ function setBusy(b) {
   pingBtn.disabled = b;
   clearBtn.disabled = b;
   deleteBtn.disabled = b || selectedIdx == null;
+  clearHistoryBtn.disabled = b;
 }
 
 function setMode(nextMode) {
@@ -165,14 +172,14 @@ function renderResults() {
     const probs = cls?.probs || {};
     const probsHtml = Object.keys(probs).length
       ? `<div class="probList">${Object.entries(probs)
-          .map(([k, v]) => `<span class="probChip">${k}: ${Number(v).toFixed(3)}</span>`)
+          .map(([k, v]) => `<span class="probChip">${escapeHtml(k)}: ${Number(v).toFixed(3)}</span>`)
           .join("")}</div>`
       : "—";
 
     return `
       <tr>
         <td>ROI ${idx}</td>
-        <td>${cls ? `<span class="badge">${cls.label}</span>` : "Pendiente"}</td>
+        <td>${cls ? `<span class="badge">${escapeHtml(cls.label)}</span>` : "Pendiente"}</td>
         <td>${cls ? Number(cls.score).toFixed(3) : "—"}</td>
         <td>${probsHtml}</td>
         <td><code>[${r.x1}, ${r.y1}] - [${r.x2}, ${r.y2}]</code></td>
@@ -328,6 +335,109 @@ function draw() {
   renderResults();
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function ordinalImageLabel(n) {
+  const names = {
+    1: "Primera imagen",
+    2: "Segunda imagen",
+    3: "Tercera imagen",
+    4: "Cuarta imagen",
+    5: "Quinta imagen",
+    6: "Sexta imagen",
+    7: "Séptima imagen",
+    8: "Octava imagen",
+    9: "Novena imagen",
+    10: "Décima imagen"
+  };
+
+  if (names[n]) return names[n];
+  return `${n}ª imagen`;
+}
+
+function addCurrentResultToHistory() {
+  if (!lastResponse?.predictions?.length) return;
+
+  const fileName = fileIn.files?.[0]?.name || "Sin nombre";
+  const roiCount = rois.length;
+  const domClass = dominantClass();
+  const avgScore = meanScore();
+
+  const detail = lastResponse.predictions.map((pred, idx) => {
+    const cls = pred?.classification;
+    if (!cls) return `ROI ${idx}: sin clasificación`;
+    return `ROI ${idx}: ${cls.label} (${Number(cls.score ?? 0).toFixed(3)})`;
+  }).join(" | ");
+
+  sessionHistory.push({
+    imageLabel: ordinalImageLabel(sessionHistory.length + 1),
+    fileName,
+    roiCount,
+    dominantClass: domClass,
+    meanScore: avgScore,
+    detail
+  });
+
+  renderHistory();
+}
+
+function renderHistory() {
+  if (!sessionHistory.length) {
+    historyBody.innerHTML = `
+      <tr>
+        <td colspan="6" class="emptyCell">Todavía no hay resultados guardados en esta sesión.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  historyBody.innerHTML = sessionHistory.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.imageLabel)}</td>
+      <td>${escapeHtml(row.fileName)}</td>
+      <td>${escapeHtml(String(row.roiCount))}</td>
+      <td>${escapeHtml(row.dominantClass)}</td>
+      <td>${escapeHtml(String(row.meanScore))}</td>
+      <td>${escapeHtml(row.detail)}</td>
+    </tr>
+  `).join("");
+}
+
+async function pingBackend(showUserMessage = false) {
+  try {
+    pingOut.textContent = "Verificando...";
+    backendStatus.textContent = "Backend: verificando";
+    backendStatus.className = "statusChip muted";
+
+    const r = await fetch(`${apiBase.value}/health`);
+    const j = await r.json();
+
+    if (j.ok) {
+      pingOut.textContent = "Disponible";
+      backendStatus.textContent = "Backend: disponible";
+      backendStatus.className = "statusChip statusOk";
+      if (showUserMessage) setMessage("El backend está disponible.", "ok");
+    } else {
+      pingOut.textContent = "Sin respuesta";
+      backendStatus.textContent = "Backend: sin respuesta";
+      backendStatus.className = "statusChip statusErr";
+      if (showUserMessage) setMessage("El backend respondió, pero no confirmó estado correcto.", "err");
+    }
+  } catch (e) {
+    pingOut.textContent = "Error";
+    backendStatus.textContent = "Backend: error";
+    backendStatus.className = "statusChip statusErr";
+    if (showUserMessage) setMessage("No se pudo verificar el backend.", "err");
+  }
+}
+
 // --- Archivo ---
 fileIn.addEventListener("change", () => {
   const f = fileIn.files?.[0];
@@ -367,6 +477,12 @@ deleteBtn.addEventListener("click", () => {
   draw();
   updateTopInfo();
   setMessage("ROI seleccionado eliminado.", "info");
+});
+
+clearHistoryBtn.addEventListener("click", () => {
+  sessionHistory = [];
+  renderHistory();
+  setMessage("Historial de sesión limpiado.", "info");
 });
 
 // --- Pointer Events ---
@@ -546,14 +662,7 @@ stage.addEventListener("pointercancel", () => {
 
 // --- API ---
 pingBtn.addEventListener("click", async () => {
-  try {
-    pingOut.textContent = "Verificando...";
-    const r = await fetch(`${apiBase.value}/health`);
-    const j = await r.json();
-    pingOut.textContent = j.ok ? "Backend disponible" : "Backend sin respuesta";
-  } catch (e) {
-    pingOut.textContent = "Error";
-  }
+  await pingBackend(true);
 });
 
 async function postForm(url, formData) {
@@ -597,7 +706,7 @@ detectBtn.addEventListener("click", async () => {
   try {
     const fd = new FormData();
     fd.append("file", f);
-    fd.append("conf", String(confIn.value || "0.01"));
+    fd.append("conf", String(confIn.value || "0.25"));
 
     const j = await postForm(`${apiBase.value}/v1/detect/upload`, fd);
 
@@ -648,7 +757,8 @@ classifyBtn.addEventListener("click", async () => {
 
     draw();
     updateTopInfo();
-    setMessage("Clasificación completada.", "ok");
+    addCurrentResultToHistory();
+    setMessage("Clasificación completada y guardada en el historial de sesión.", "ok");
   } catch (e) {
     alert(String(e));
     setMessage(String(e), "err");
@@ -662,3 +772,5 @@ setMode("select");
 updateTopInfo();
 renderSummary();
 renderResults();
+renderHistory();
+pingBackend(false);
