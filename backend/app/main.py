@@ -27,7 +27,7 @@ from .storage import (
     delete_object,
 )
 from .yolo_service import detect_rois
-from .classifier_service import classify_image
+from .classifier_service import classify_image, classify_crops_batch
 
 app = FastAPI(title="IRFlies API", version="1.0.0")
 
@@ -92,7 +92,7 @@ async def detect_upload(file: UploadFile = File(...), conf: float = Form(default
 def detect_gcs(payload: DetectGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-    rois = detect_rois(image_bytes, conf=payload.conf)  # <-- FIX
+    rois = detect_rois(image_bytes, conf=payload.conf)
     return DetectResponse(rois=rois)
 
 
@@ -114,7 +114,7 @@ def classify_gcs(payload: ClassifyGcsRequest):
 
 
 # --------------------
-# Pipeline (detect -> crop -> classify)
+# Pipeline (detect -> crop -> classify)  [BATCH]
 # --------------------
 @app.post("/v1/pipeline/upload", response_model=PipelineResponse)
 async def pipeline_upload(
@@ -130,12 +130,15 @@ async def pipeline_upload(
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
+    # 1) crops list
+    crops = [img.crop((r.x1, r.y1, r.x2, r.y2)) for r in rois]
+
+    # 2) one batch inference
+    cls_list = classify_crops_batch(crops)
+
+    # 3) pack response
     preds = []
-    for i, roi in enumerate(rois):
-        crop = img.crop((roi.x1, roi.y1, roi.x2, roi.y2))
-        buf = io.BytesIO()
-        crop.save(buf, format="PNG")
-        cls = classify_image(buf.getvalue())
+    for i, (roi, cls) in enumerate(zip(rois, cls_list)):
         preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
 
     return PipelineResponse(rois=rois, predictions=preds)
@@ -152,12 +155,11 @@ def pipeline_gcs(payload: PipelineGcsRequest):
 
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
+    crops = [img.crop((r.x1, r.y1, r.x2, r.y2)) for r in rois]
+    cls_list = classify_crops_batch(crops)
+
     preds = []
-    for i, roi in enumerate(rois):
-        crop = img.crop((roi.x1, roi.y1, roi.x2, roi.y2))
-        buf = io.BytesIO()
-        crop.save(buf, format="PNG")
-        cls = classify_image(buf.getvalue())
+    for i, (roi, cls) in enumerate(zip(rois, cls_list)):
         preds.append(RoiPrediction(roi_index=i, roi=roi, classification=cls))
 
     return PipelineResponse(rois=rois, predictions=preds)
