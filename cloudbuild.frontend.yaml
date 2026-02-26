@@ -1,0 +1,45 @@
+substitutions:
+  _DEPLOY_REGION: northamerica-south1
+  _AR_HOSTNAME: northamerica-south1-docker.pkg.dev
+  _AR_REPOSITORY: irflies
+  _SERVICE_NAME: irflies-web
+  _IMAGE_NAME: irflies-web
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}",
+        "-f",
+        "frontend/Dockerfile",
+        "frontend"
+      ]
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "push",
+        "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
+      ]
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      [
+        "run", "deploy", "${_SERVICE_NAME}",
+        "--image", "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}",
+        "--region", "${_DEPLOY_REGION}",
+        "--platform", "managed",
+        "--allow-unauthenticated",
+        "--cpu", "1",
+        "--memory", "256Mi",
+        "--concurrency", "80"
+      ]
+
+images:
+  - "${_AR_HOSTNAME}/${PROJECT_ID}/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
