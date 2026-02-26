@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IRFlies Front MVP</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>IRFlies</h1>
+
+    <div class="row">
+      <label>API Base URL</label>
+      <input id="apiBase" type="text" />
+      <button id="pingBtn">/health</button>
+      <span id="pingOut" class="muted"></span>
+    </div>
+
+    <div class="row">
+      <input id="file" type="file" accept="image/*" />
+      <label class="muted">conf</label>
+      <input id="conf" type="number" step="0.01" min="0" max="1" value="0.01" style="width:90px" />
+      <button id="autoBtn">Auto (YOLO + Classify)</button>
+      <button id="manualBtn">Classify ROIs (Manual)</button>
+      <button id="clearBtn" class="ghost">Limpiar ROIs</button>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="imgStage" id="stage">
+          <img id="img" alt="preview" />
+          <div id="boxes"></div>
+        </div>
+        <p class="muted">
+          Dibuja un ROI: click y arrastra sobre la imagen. (Puedes borrar ROIs en la lista).
+        </p>
+      </div>
+
+      <div class="panel">
+        <h3>ROIs</h3>
+        <div id="roiList" class="list"></div>
+
+        <h3>Respuesta</h3>
+        <pre id="out" class="out">{}</pre>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
