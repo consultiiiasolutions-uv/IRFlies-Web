@@ -51,6 +51,7 @@ class SignedUploadUrlResponse(BaseModel):
 class PipelineGcsRequest(BaseModel):
     gcs_uri: str
     conf: float = 0.03
+    rois: List[RoiXYXY] = Field(default_factory=list)
 
 
 class RoiPrediction(BaseModel):
