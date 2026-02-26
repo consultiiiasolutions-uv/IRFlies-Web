@@ -35,6 +35,19 @@ body{
   box-shadow:var(--shadow);
   padding:20px;
   margin-bottom:16px;
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+  justify-content:space-between;
+  flex-wrap:wrap;
+}
+
+.heroSide{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:flex-end;
+  min-width:220px;
 }
 
 .eyebrow{
@@ -61,6 +74,7 @@ h2{
   margin:10px 0 0 0;
   color:var(--muted);
   line-height:1.6;
+  max-width:760px;
 }
 
 .panel{
@@ -74,6 +88,13 @@ h2{
 
 .sectionHead{
   margin-bottom:12px;
+}
+
+.historyHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
 }
 
 .row{
@@ -154,6 +175,16 @@ button.activeMode{
   color:var(--orange-dark);
 }
 
+.smallBtn{
+  padding:7px 10px;
+  font-size:12px;
+  border-radius:10px;
+}
+
+.smallText{
+  font-size:12px;
+}
+
 .statusChip{
   display:inline-flex;
   align-items:center;
@@ -165,6 +196,18 @@ button.activeMode{
   font-size:13px;
   font-weight:700;
   color:#9a4d13;
+}
+
+.statusOk{
+  background:#f0fdf4;
+  border-color:#bbf7d0;
+  color:#166534;
+}
+
+.statusErr{
+  background:#fef2f2;
+  border-color:#fecaca;
+  color:#991b1b;
 }
 
 .muted{
@@ -415,6 +458,45 @@ button.activeMode{
   background:#fff6ee;
   border:1px solid #f5d0b5;
   font-size:12px;
+}
+
+.techTools{
+  width:100%;
+  max-width:360px;
+  border:1px solid #f0d0b6;
+  border-radius:14px;
+  background:#fffaf5;
+  overflow:hidden;
+}
+
+.techTools summary{
+  list-style:none;
+  cursor:pointer;
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:800;
+  color:var(--muted);
+  user-select:none;
+}
+
+.techTools summary::-webkit-details-marker{
+  display:none;
+}
+
+.techBody{
+  padding:0 12px 12px;
+  border-top:1px solid #f5dfcf;
+}
+
+.techRow{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-top:10px;
+}
+
+.techRow input{
+  width:100%;
 }
 
 @media (min-width: 900px){
