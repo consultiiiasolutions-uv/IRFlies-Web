@@ -47,7 +47,15 @@ body{
   flex-direction:column;
   gap:10px;
   align-items:flex-end;
-  min-width:220px;
+  min-width:240px;
+}
+
+.heroActionsTop{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
 .eyebrow{
@@ -70,6 +78,11 @@ h2{
   font-size:18px;
 }
 
+h3{
+  margin:0;
+  font-size:15px;
+}
+
 .heroText{
   margin:10px 0 0 0;
   color:var(--muted);
@@ -90,11 +103,31 @@ h2{
   margin-bottom:12px;
 }
 
+.sectionHeadBetween{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.smallHead{
+  margin-top:16px;
+  margin-bottom:10px;
+}
+
 .historyHead{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
+  flex-wrap:wrap;
+}
+
+.historyActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
 }
 
 .row{
@@ -251,11 +284,33 @@ button.activeMode{
   align-content:start;
 }
 
+.previewMeta{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:4px;
+}
+
+.previewFileLabel{
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.previewFileName{
+  font-size:14px;
+  word-break:break-word;
+  text-align:right;
+}
+
 .imgStage{
   position:relative;
   width:100%;
-  min-height:320px;
-  background:#fffdfb;
+  height:clamp(320px, 62vh, 760px);
+  background:
+    linear-gradient(180deg, #fffdfb 0%, #fff7f0 100%);
   border-radius:16px;
   overflow:hidden;
   border:1px solid var(--line);
@@ -263,9 +318,13 @@ button.activeMode{
 }
 
 .imgStage img{
-  display:block;
+  position:absolute;
+  inset:0;
   width:100%;
-  height:auto;
+  height:100%;
+  object-fit:contain;
+  object-position:center;
+  display:block;
   user-select:none;
   pointer-events:none;
 }
@@ -292,8 +351,8 @@ button.activeMode{
 
 .box .tag{
   position:absolute;
-  left:0;
-  top:-26px;
+  left:8px;
+  top:8px;
   font-size:12px;
   background:#3b2a1c;
   color:#fff;
@@ -301,6 +360,9 @@ button.activeMode{
   padding:3px 8px;
   border-radius:10px;
   white-space:nowrap;
+  max-width:calc(100% - 16px);
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .handle{
@@ -351,6 +413,60 @@ button.activeMode{
   margin-bottom:6px;
 }
 
+.summaryResultsBlock{
+  margin-top:8px;
+}
+
+.currentResultsList{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.resultCard{
+  background:#fffdfa;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:12px;
+}
+
+.resultHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.resultTitle{
+  font-size:14px;
+  font-weight:800;
+  margin-bottom:4px;
+}
+
+.resultMeta{
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+
+.resultProbTitle{
+  margin-top:10px;
+  margin-bottom:6px;
+  font-size:12px;
+  font-weight:800;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+
+.emptyBlock{
+  padding:14px;
+  border:1px dashed #efc8a9;
+  border-radius:14px;
+  background:#fffaf5;
+  text-align:center;
+}
+
 .list{
   display:flex;
   flex-direction:column;
@@ -372,6 +488,7 @@ button.activeMode{
   display:flex;
   flex-direction:column;
   gap:4px;
+  min-width:0;
 }
 
 .itemTop{
@@ -379,6 +496,11 @@ button.activeMode{
   align-items:center;
   gap:8px;
   flex-wrap:wrap;
+}
+
+.roiMeta{
+  font-size:12px;
+  color:var(--muted);
 }
 
 .badge{
@@ -391,11 +513,6 @@ button.activeMode{
   font-size:12px;
   font-weight:800;
   color:#9a4d13;
-}
-
-.item code{
-  font-size:12px;
-  color:var(--muted);
 }
 
 .itemActions{
@@ -506,5 +623,42 @@ button.activeMode{
 
   .summaryGrid{
     grid-template-columns:repeat(3,1fr);
+  }
+}
+
+@media (max-width: 720px){
+  .heroSide{
+    width:100%;
+    align-items:stretch;
+  }
+
+  .heroActionsTop{
+    justify-content:space-between;
+  }
+
+  .previewMeta{
+    align-items:flex-start;
+  }
+
+  .previewFileName{
+    text-align:left;
+  }
+
+  .imgStage{
+    height:clamp(280px, 52vh, 560px);
+  }
+
+  .resultHead{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  .item{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  .itemActions{
+    width:100%;
   }
 }
