@@ -662,3 +662,50 @@ button.activeMode{
     width:100%;
   }
 }
+
+.controlsPanel .row{
+  align-items:flex-start;
+}
+
+.controlsPanel .actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel .actions button{
+  flex:1 1 180px;
+}
+
+.controlsPanel .navRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel .infoRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel input[type="file"]{
+  width:100%;
+}
+
+@media (max-width: 900px){
+  .controlsPanel .actions button{
+    flex:1 1 100%;
+  }
+
+  .controlsPanel .navRow{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .controlsPanel .navRow button,
+  .controlsPanel .navRow .statusChip{
+    width:100%;
+    justify-content:center;
+  }
+}
