@@ -840,3 +840,145 @@ button.activeMode{
     overflow:visible;
   }
 }
+
+/* ===== Layout correcto: imagen arriba y doble columna abajo ===== */
+
+.imagePanelTop{
+  margin-bottom:16px;
+}
+
+.belowGrid{
+  display:grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap:16px;
+  align-items:start;
+  margin-bottom:16px;
+}
+
+.rightStack{
+  display:grid;
+  gap:16px;
+  align-content:start;
+}
+
+.controlsPanel .row{
+  align-items:flex-start;
+}
+
+.controlsPanel .actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel .actions button{
+  flex:1 1 220px;
+}
+
+.controlsPanel .navRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel .infoRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.controlsPanel input[type="file"]{
+  width:100%;
+}
+
+.roiPanelCompact .list{
+  gap:8px;
+}
+
+.roiPanelCompact .item{
+  padding:8px 10px;
+}
+
+.summaryGrid{
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+
+.summaryCard{
+  padding:10px 12px;
+  border-radius:14px;
+}
+
+.summaryCard strong{
+  font-size:16px;
+  line-height:1.1;
+}
+
+.summaryLabel{
+  font-size:12px;
+  margin-bottom:4px;
+}
+
+.summaryResultsBlock{
+  margin-top:10px;
+}
+
+.smallHead{
+  margin-top:10px;
+  margin-bottom:8px;
+}
+
+.currentResultsList{
+  gap:8px;
+}
+
+.resultCard{
+  padding:10px;
+  border-radius:14px;
+}
+
+.resultTitle{
+  font-size:13px;
+  margin-bottom:2px;
+}
+
+.resultMeta{
+  font-size:12px;
+  line-height:1.35;
+}
+
+.resultProbTitle{
+  margin-top:8px;
+  margin-bottom:4px;
+  font-size:11px;
+}
+
+.helper{
+  font-size:12px;
+  line-height:1.45;
+}
+
+@media (max-width: 900px){
+  .belowGrid{
+    grid-template-columns:1fr;
+  }
+
+  .summaryGrid{
+    grid-template-columns:1fr;
+  }
+
+  .controlsPanel .actions button{
+    flex:1 1 100%;
+  }
+
+  .controlsPanel .navRow{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .controlsPanel .navRow button,
+  .controlsPanel .navRow .statusChip{
+    width:100%;
+    justify-content:center;
+  }
+}
