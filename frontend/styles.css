@@ -843,92 +843,87 @@ button.activeMode{
 
 /* ===== Layout correcto: imagen arriba y doble columna abajo ===== */
 
-.imagePanelTop{
-  margin-bottom:16px;
-}
+/* ===== Compactación sin cambiar la estructura original ===== */
 
-.belowGrid{
-  display:grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap:16px;
+.grid{
   align-items:start;
-  margin-bottom:16px;
 }
 
-.rightStack{
+.sideCol{
   display:grid;
-  gap:16px;
+  gap:12px;
   align-content:start;
+}
+
+.sideCol > .panel{
+  padding:14px;
+  margin-bottom:0;
 }
 
 .controlsPanel .row{
   align-items:flex-start;
+  margin:8px 0;
 }
 
 .controlsPanel .actions{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
+  gap:8px;
 }
 
 .controlsPanel .actions button{
-  flex:1 1 220px;
+  flex:1 1 180px;
+  min-height:40px;
 }
 
 .controlsPanel .navRow{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
+  gap:8px;
 }
 
 .controlsPanel .infoRow{
   display:flex;
   flex-wrap:wrap;
-  gap:10px;
+  gap:8px;
 }
 
 .controlsPanel input[type="file"]{
   width:100%;
 }
 
-.roiPanelCompact .list{
-  gap:8px;
-}
-
-.roiPanelCompact .item{
-  padding:8px 10px;
-}
-
-.summaryGrid{
+.summaryPanelCompact .summaryGrid{
   grid-template-columns:repeat(3,1fr);
   gap:8px;
 }
 
-.summaryCard{
+.summaryPanelCompact .summaryCard{
   padding:10px 12px;
   border-radius:14px;
 }
 
-.summaryCard strong{
+.summaryPanelCompact .summaryCard strong{
   font-size:16px;
   line-height:1.1;
 }
 
-.summaryLabel{
+.summaryPanelCompact .summaryLabel{
   font-size:12px;
   margin-bottom:4px;
 }
 
-.summaryResultsBlock{
+.summaryPanelCompact .summaryResultsBlock{
   margin-top:10px;
 }
 
-.smallHead{
+.summaryPanelCompact .smallHead{
   margin-top:10px;
   margin-bottom:8px;
 }
 
 .currentResultsList{
+  display:flex;
+  flex-direction:column;
   gap:8px;
 }
 
@@ -953,17 +948,60 @@ button.activeMode{
   font-size:11px;
 }
 
+.roiPanelCompact .list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.roiPanelCompact .item{
+  padding:8px 10px;
+  border-radius:14px;
+}
+
+.roiPanelCompact .itemTop{
+  gap:6px;
+}
+
+.roiPanelCompact .roiMeta{
+  font-size:11px;
+}
+
+.roiPanelCompact .itemActions button{
+  padding:6px 9px;
+  font-size:12px;
+}
+
+.compactActions{
+  gap:8px;
+}
+
+.compactActions button{
+  flex:1 1 180px;
+}
+
 .helper{
   font-size:12px;
   line-height:1.45;
 }
 
-@media (max-width: 900px){
-  .belowGrid{
-    grid-template-columns:1fr;
+.panel{
+  margin-bottom:16px;
+}
+
+@media (min-width: 900px){
+  .grid{
+    grid-template-columns:1.25fr .75fr;
+    gap:16px;
   }
 
-  .summaryGrid{
+  .summaryPanelCompact .summaryGrid{
+    grid-template-columns:repeat(3,1fr);
+  }
+}
+
+@media (max-width: 900px){
+  .summaryPanelCompact .summaryGrid{
     grid-template-columns:1fr;
   }
 
