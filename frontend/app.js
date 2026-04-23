@@ -14,8 +14,6 @@ const backendStatus = $("backendStatus");
 const langToggleBtn = $("langToggleBtn");
 
 const classifyBtn = $("classifyBtn");
-const selectBtn = $("selectBtn");
-const drawBtn = $("drawBtn");
 const openOriginalBtn = $("openOriginalBtn");
 const clearHistoryBtn = $("clearHistoryBtn");
 const exportCsvBtn = $("exportCsvBtn");
@@ -427,8 +425,6 @@ function updateControlStates() {
 
   pingBtn.disabled = isBusy;
   classifyBtn.disabled = isBusy || !hasImage || !hasRois;
-  selectBtn.disabled = isBusy || !hasImage;
-  drawBtn.disabled = isBusy || !hasImage;
   openOriginalBtn.disabled = isBusy || !hasImage;
   clearHistoryBtn.disabled = isBusy || sessionHistory.length === 0;
   exportCsvBtn.disabled = isBusy || sessionHistory.length === 0;
@@ -441,13 +437,11 @@ function updateControlStates() {
   confIn.disabled = isBusy;
 }
 
-function setMode(nextMode) {
-  mode = nextMode;
+function setMode() {
+  mode = "select";
   modeOut.textContent = t("status.mode", {
-    mode: mode === "draw" ? t("modes.draw") : t("modes.select"),
+    mode: t("modes.select"),
   });
-  selectBtn.classList.toggle("activeMode", mode === "select");
-  drawBtn.classList.toggle("activeMode", mode === "draw");
 }
 
 function setBackendState(nextState) {
@@ -1272,13 +1266,14 @@ function applyTranslations() {
     currentLang === "es" ? "Imagen siguiente →" : "Next image →";
 
   classifyBtn.textContent = t("buttons.classify");
-  selectBtn.textContent = t("buttons.select");
-  drawBtn.textContent = t("buttons.draw");
   openOriginalBtn.textContent = t("buttons.openOriginal");
 
   $("imageSectionTitle").textContent = t("sections.image");
   $("previewFileLabel").textContent = t("labels.currentFile");
-  $("helperText").textContent = t("helper");
+  $("helperText").textContent =
+    currentLang === "es"
+      ? "Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo."
+      : "Tap or click an ROI to move it. Use the corners to resize it.";
 
   $("summaryTitle").textContent = t("sections.summary");
   $("sumRoisLabel").textContent = t("labels.roisCurrent");
@@ -1338,9 +1333,6 @@ nextImageBtn.addEventListener("click", () => {
     goToImage(currentFileIndex + 1);
   }
 });
-
-selectBtn.addEventListener("click", () => setMode("select"));
-drawBtn.addEventListener("click", () => setMode("draw"));
 
 openOriginalBtn.addEventListener("click", () => {
   if (!currentObjectUrl) {
@@ -1607,7 +1599,7 @@ window.addEventListener("resize", () => {
 
 // Estado inicial
 applyTranslations();
-setMode("select");
+setMode();
 updateTopInfo();
 renderSummary();
 renderResults();
