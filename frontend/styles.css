@@ -709,3 +709,134 @@ button.activeMode{
     justify-content:center;
   }
 }
+
+.grid{
+  align-items:stretch;
+}
+
+.sideCol{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  height:100%;
+}
+
+.sideCol > .panel{
+  padding:14px;
+}
+
+.sideCol > .panel:last-child{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+
+#roiList{
+  flex:1;
+  overflow:auto;
+  min-height:0;
+  gap:8px;
+}
+
+.summaryGrid{
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
+}
+
+.summaryCard{
+  padding:10px 12px;
+  border-radius:14px;
+}
+
+.summaryCard strong{
+  font-size:16px;
+  line-height:1.1;
+}
+
+.summaryLabel{
+  font-size:12px;
+  margin-bottom:4px;
+}
+
+.summaryResultsBlock{
+  margin-top:10px;
+}
+
+.smallHead{
+  margin-top:10px;
+  margin-bottom:8px;
+}
+
+.currentResultsList{
+  gap:8px;
+}
+
+.resultCard{
+  padding:10px;
+  border-radius:14px;
+}
+
+.resultTitle{
+  font-size:13px;
+  margin-bottom:2px;
+}
+
+.resultMeta{
+  font-size:12px;
+  line-height:1.35;
+}
+
+.resultProbTitle{
+  margin-top:8px;
+  margin-bottom:4px;
+  font-size:11px;
+}
+
+.item{
+  padding:8px 10px;
+  border-radius:14px;
+}
+
+.itemTop{
+  gap:6px;
+}
+
+.roiMeta{
+  font-size:11px;
+}
+
+.itemActions button{
+  padding:6px 9px;
+  font-size:12px;
+}
+
+.compactActions{
+  gap:8px;
+}
+
+.compactActions button{
+  flex:1 1 180px;
+}
+
+.helper{
+  font-size:12px;
+  line-height:1.45;
+}
+
+@media (max-width: 900px){
+  .summaryGrid{
+    grid-template-columns:1fr;
+  }
+
+  .compactActions button{
+    flex:1 1 100%;
+  }
+
+  .sideCol > .panel:last-child{
+    flex:unset;
+  }
+
+  #roiList{
+    overflow:visible;
+  }
+}
