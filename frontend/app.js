@@ -437,6 +437,40 @@ function setMessage(text, type = "info") {
   msg.className = `msg ${type}`;
 }
 
+function syncTranslatedMessage() {
+  const currentText = msg.textContent.trim();
+
+  const knownMessageKeys = [
+    "messages.initial",
+    "messages.noImageSelected",
+    "messages.backendOk",
+    "messages.backendBad",
+    "messages.backendUnavailable",
+    "messages.classifyNoRois",
+    "messages.historyCleared",
+    "messages.exportDone",
+    "messages.exportEmpty",
+    "messages.openOriginalMissing",
+  ];
+
+  for (const key of knownMessageKeys) {
+    const esText = lookupTranslation(translations.es, key);
+    const enText = lookupTranslation(translations.en, key);
+
+    if (currentText === esText || currentText === enText) {
+      const type =
+        key.includes("Bad") || key.includes("Unavailable")
+          ? "err"
+          : key.includes("Ok") || key.includes("Done")
+          ? "ok"
+          : "info";
+
+      setMessage(t(key), type);
+      return;
+    }
+  }
+}
+
 function setBusy(value) {
   isBusy = value;
   updateControlStates();
@@ -1397,8 +1431,8 @@ function applyTranslations() {
   renderResults();
   renderRoiList();
   renderHistory();
+  syncTranslatedMessage();
 }
-
 // --- Archivo ---
 fileIn.addEventListener("change", async () => {
   if (exampleSelect) exampleSelect.value = "";
