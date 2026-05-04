@@ -7,6 +7,7 @@ const stage = $("stage");
 const boxes = $("boxes");
 const roiList = $("roiList");
 const confIn = $("conf");
+const exampleSelect = $("exampleSelect");
 
 const pingBtn = $("pingBtn");
 const pingOut = $("pingOut");
@@ -39,14 +40,21 @@ apiBase.value = DEFAULT_API_BASE;
 
 const MIN_SIZE = 6;
 
+const EXAMPLE_FILES = [
+  { fileName: "ef8_1.jpg", key: "ef8_1" },
+  { fileName: "ef8_2.jpg", key: "ef8_2" },
+  { fileName: "ef9_1.JPG", key: "ef9_1" },
+  { fileName: "ef9_2.JPG", key: "ef9_2" },
+];
+
 let currentLang = localStorage.getItem("irflies_lang") || "es";
 
 let rois = [];
 let lastResponse = null;
 let selectedIdx = null;
-let mode = "select"; // select | draw
+let mode = "select";
 
-let pointerState = null; // draw | move | resize
+let pointerState = null;
 let previewRect = null;
 
 // Archivos seleccionados y navegación
@@ -64,7 +72,7 @@ let sessionHistory = [];
 // Estado UI
 let isBusy = false;
 let autoDetectionRunning = false;
-let backendState = "checking"; // checking | ok | bad | error | idle
+let backendState = "checking";
 
 const translations = {
   es: {
@@ -94,11 +102,10 @@ const translations = {
       currentResults: "Resultados actuales",
       rois: "ROIs",
       history: "Historial de sesión",
+      examples: "Probar ejemplos",
     },
     buttons: {
       classify: "Clasificar ROIs",
-      select: "Seleccionar / editar",
-      draw: "Dibujar ROI",
       openOriginal: "Ver imagen completa",
       exportCsv: "Exportar CSV",
       clearHistory: "Limpiar historial",
@@ -109,13 +116,13 @@ const translations = {
       roisCurrent: "ROIs actuales",
       dominantClass: "Clase dominante",
       meanScore: "Score medio",
+      example: "Ejemplo",
     },
     modes: {
       select: "seleccionar",
-      draw: "dibujar",
     },
     helper:
-      "En modo dibujar: arrastra sobre la imagen para crear un ROI. En modo seleccionar: toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.",
+      "Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.",
     status: {
       backendChecking: "Backend: verificando",
       backendAvailable: "Backend: disponible",
@@ -141,12 +148,11 @@ const translations = {
       imageReadyWithRois:
         "Imagen cargada: {name}. Hay {count} ROI(s) listos para revisar o clasificar.",
       imageReadyNoDetected:
-        "Imagen cargada: {name}. No se detectaron ojos; puedes dibujar ROIs manualmente.",
+        "Imagen cargada: {name}. No se detectaron ojos; puedes ajustar el ROI si hace falta.",
       imageDetecting:
         "Imagen cargada: {name}. La detección automática sigue en proceso.",
       detectError:
         "No se pudo detectar automáticamente en {name}: {error}",
-      roiAdded: "ROI manual agregado.",
       roiDeleted: "ROI eliminado.",
       historyCleared: "Historial de sesión limpiado.",
       classifyDone:
@@ -164,6 +170,8 @@ const translations = {
         "La detección automática terminó con incidencias. Imágenes: {count}, ROIs: {rois}, fallas: {failures}.",
       openOriginalMissing: "No hay imagen para abrir.",
       unexpected: "Ocurrió un error: {error}",
+      exampleLoading: "Cargando ejemplo: {name}",
+      exampleLoadError: "No se pudo cargar el ejemplo {name}: {error}",
     },
     roiList: {
       empty: "No hay ROIs todavía.",
@@ -195,6 +203,14 @@ const translations = {
       detailItem: "ROI {roi}: {label} ({score})",
       noDetail: "Sin detalle",
     },
+    examples: {
+      hint: "Selecciona un ejemplo y se cargará automáticamente.",
+      placeholder: "Selecciona un ejemplo…",
+      ef8_1: "Ejemplo EF8 1",
+      ef8_2: "Ejemplo EF8 2",
+      ef9_1: "Ejemplo EF9 1",
+      ef9_2: "Ejemplo EF9 2",
+    },
   },
   en: {
     page: {
@@ -223,11 +239,10 @@ const translations = {
       currentResults: "Current results",
       rois: "ROIs",
       history: "Session history",
+      examples: "Try examples",
     },
     buttons: {
       classify: "Classify ROIs",
-      select: "Select / edit",
-      draw: "Draw ROI",
       openOriginal: "View full image",
       exportCsv: "Export CSV",
       clearHistory: "Clear history",
@@ -238,13 +253,13 @@ const translations = {
       roisCurrent: "Current ROIs",
       dominantClass: "Dominant class",
       meanScore: "Mean score",
+      example: "Example",
     },
     modes: {
       select: "select",
-      draw: "draw",
     },
     helper:
-      "In draw mode: drag over the image to create an ROI. In select mode: tap or click an ROI to move it. Use the corners to resize it.",
+      "Tap or click an ROI to move it. Use the corners to resize it.",
     status: {
       backendChecking: "Backend: checking",
       backendAvailable: "Backend: available",
@@ -270,12 +285,11 @@ const translations = {
       imageReadyWithRois:
         "Image loaded: {name}. There are {count} ROI(s) ready to review or classify.",
       imageReadyNoDetected:
-        "Image loaded: {name}. No eyes were detected; you can draw ROIs manually.",
+        "Image loaded: {name}. No eyes were detected; you can adjust the ROI if needed.",
       imageDetecting:
         "Image loaded: {name}. Automatic detection is still in progress.",
       detectError:
         "Automatic detection failed for {name}: {error}",
-      roiAdded: "Manual ROI added.",
       roiDeleted: "ROI deleted.",
       historyCleared: "Session history cleared.",
       classifyDone:
@@ -293,6 +307,8 @@ const translations = {
         "Automatic detection finished with issues. Images: {count}, ROIs: {rois}, failures: {failures}.",
       openOriginalMissing: "There is no image to open.",
       unexpected: "An error occurred: {error}",
+      exampleLoading: "Loading example: {name}",
+      exampleLoadError: "Could not load example {name}: {error}",
     },
     roiList: {
       empty: "There are no ROIs yet.",
@@ -323,6 +339,14 @@ const translations = {
       },
       detailItem: "ROI {roi}: {label} ({score})",
       noDetail: "No detail",
+    },
+    examples: {
+      hint: "Select an example and it will load automatically.",
+      placeholder: "Select an example…",
+      ef8_1: "EF8 example 1",
+      ef8_2: "EF8 example 2",
+      ef9_1: "EF9 example 1",
+      ef9_2: "EF9 example 2",
     },
   },
 };
@@ -361,7 +385,7 @@ function emptyImageState() {
     rois: [],
     lastResponse: null,
     selectedIdx: null,
-    detectStatus: "idle", // idle | detecting | done | error
+    detectStatus: "idle",
     detectError: null,
   };
 }
@@ -435,6 +459,7 @@ function updateControlStates() {
     currentFileIndex >= selectedFiles.length - 1;
   fileIn.disabled = isBusy;
   confIn.disabled = isBusy;
+  exampleSelect.disabled = isBusy;
 }
 
 function setMode() {
@@ -474,16 +499,9 @@ function updateBackendStatusUI() {
     return;
   }
 
-  if (backendState === "checking") {
-    backendStatus.textContent = t("status.backendChecking");
-    backendStatus.classList.add("muted");
-    pingOut.textContent = t("tools.pingChecking");
-    return;
-  }
-
   backendStatus.textContent = t("status.backendChecking");
   backendStatus.classList.add("muted");
-  pingOut.textContent = t("tools.pingIdle");
+  pingOut.textContent = t("tools.pingChecking");
 }
 
 function updateTopInfo() {
@@ -507,7 +525,7 @@ function updateTopInfo() {
     imagePosition.textContent = t("status.noImagesLoaded");
   }
 
-  setMode(mode);
+  setMode();
   updateControlStates();
 }
 
@@ -541,20 +559,6 @@ function getDisplayMetrics() {
     dispHeight,
     scale,
   };
-}
-
-function isInsideDisplayedImage(clientX, clientY) {
-  if (!img.naturalWidth || !img.naturalHeight) return false;
-  const m = getDisplayMetrics();
-  const localX = clientX - m.stageRect.left;
-  const localY = clientY - m.stageRect.top;
-
-  return (
-    localX >= m.dispLeft &&
-    localX <= m.dispLeft + m.dispWidth &&
-    localY >= m.dispTop &&
-    localY <= m.dispTop + m.dispHeight
-  );
 }
 
 function clientToImageCoords(clientX, clientY) {
@@ -993,6 +997,47 @@ function exportHistoryCsv() {
   setMessage(t("messages.exportDone"), "ok");
 }
 
+function buildExampleOptions() {
+  const previousValue = exampleSelect.value;
+
+  exampleSelect.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = t("examples.placeholder");
+  exampleSelect.appendChild(placeholder);
+
+  EXAMPLE_FILES.forEach((example) => {
+    const option = document.createElement("option");
+    option.value = example.fileName;
+    option.textContent = t(`examples.${example.key}`);
+    exampleSelect.appendChild(option);
+  });
+
+  if ([...exampleSelect.options].some((opt) => opt.value === previousValue)) {
+    exampleSelect.value = previousValue;
+  } else {
+    exampleSelect.value = "";
+  }
+}
+
+function guessMimeType(fileName) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".jpeg") || lower.endsWith(".jpg")) return "image/jpeg";
+  return "application/octet-stream";
+}
+
+function getExampleLabel(fileName) {
+  const example = EXAMPLE_FILES.find((item) => item.fileName === fileName);
+  if (!example) return fileName;
+  return t(`examples.${example.key}`);
+}
+
+function getExamplePath(fileName) {
+  return `./examples/${fileName}`;
+}
+
 async function pingBackend(showUserMessage = false) {
   try {
     setBackendState("checking");
@@ -1237,6 +1282,58 @@ async function autoDetectAllSelectedFiles() {
   }
 }
 
+async function loadFilesIntoSession(files) {
+  if (currentObjectUrl) {
+    URL.revokeObjectURL(currentObjectUrl);
+    currentObjectUrl = null;
+  }
+
+  selectedFiles = files;
+  imageStates = selectedFiles.map(() => emptyImageState());
+  currentFileIndex = selectedFiles.length ? 0 : -1;
+
+  loadCurrentImage();
+
+  if (selectedFiles.length) {
+    await autoDetectAllSelectedFiles();
+  } else {
+    setMessage(t("messages.initial"), "info");
+  }
+}
+
+async function loadExampleByName(fileName) {
+  if (!fileName) return;
+
+  const displayName = getExampleLabel(fileName);
+
+  try {
+    setBusy(true);
+    setMessage(t("messages.exampleLoading", { name: displayName }), "info");
+
+    const response = await fetch(getExamplePath(fileName), { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const exampleFile = new File([blob], fileName, {
+      type: blob.type || guessMimeType(fileName),
+    });
+
+    fileIn.value = "";
+    await loadFilesIntoSession([exampleFile]);
+  } catch (error) {
+    setBusy(false);
+    setMessage(
+      t("messages.exampleLoadError", {
+        name: displayName,
+        error: String(error),
+      }),
+      "err"
+    );
+  }
+}
+
 function toggleLanguage() {
   currentLang = currentLang === "es" ? "en" : "es";
   localStorage.setItem("irflies_lang", currentLang);
@@ -1270,10 +1367,12 @@ function applyTranslations() {
 
   $("imageSectionTitle").textContent = t("sections.image");
   $("previewFileLabel").textContent = t("labels.currentFile");
-  $("helperText").textContent =
-    currentLang === "es"
-      ? "Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo."
-      : "Tap or click an ROI to move it. Use the corners to resize it.";
+  $("helperText").textContent = t("helper");
+
+  $("examplesTitle").textContent = t("sections.examples");
+  $("examplesHint").textContent = t("examples.hint");
+  $("exampleSelectLabel").textContent = t("labels.example");
+  buildExampleOptions();
 
   $("summaryTitle").textContent = t("sections.summary");
   $("sumRoisLabel").textContent = t("labels.roisCurrent");
@@ -1306,22 +1405,15 @@ function applyTranslations() {
 
 // --- Archivo ---
 fileIn.addEventListener("change", async () => {
-  if (currentObjectUrl) {
-    URL.revokeObjectURL(currentObjectUrl);
-    currentObjectUrl = null;
-  }
+  exampleSelect.value = "";
+  const files = Array.from(fileIn.files || []);
+  await loadFilesIntoSession(files);
+});
 
-  selectedFiles = Array.from(fileIn.files || []);
-  imageStates = selectedFiles.map(() => emptyImageState());
-  currentFileIndex = selectedFiles.length ? 0 : -1;
-
-  loadCurrentImage();
-
-  if (selectedFiles.length) {
-    await autoDetectAllSelectedFiles();
-  } else {
-    setMessage(t("messages.initial"), "info");
-  }
+exampleSelect.addEventListener("change", async () => {
+  const selectedExample = exampleSelect.value;
+  if (!selectedExample) return;
+  await loadExampleByName(selectedExample);
 });
 
 prevImageBtn.addEventListener("click", () => {
@@ -1366,24 +1458,6 @@ stage.addEventListener("pointerdown", (e) => {
 
   const handle = e.target.closest(".handle");
   const box = e.target.closest(".box");
-
-  if (mode === "draw" && !handle && !box) {
-    if (!isInsideDisplayedImage(e.clientX, e.clientY)) return;
-
-    const { x, y } = clientToImageCoords(e.clientX, e.clientY);
-
-    pointerState = {
-      type: "draw",
-      startX: x,
-      startY: y,
-      pointerId: e.pointerId,
-    };
-
-    previewRect = { x1: x, y1: y, x2: x, y2: y };
-    stage.setPointerCapture(e.pointerId);
-    draw();
-    return;
-  }
 
   if (handle) {
     const idx = Number(handle.dataset.idx);
@@ -1443,17 +1517,6 @@ stage.addEventListener("pointermove", (e) => {
 
   const { x, y } = clientToImageCoords(e.clientX, e.clientY);
 
-  if (pointerState.type === "draw") {
-    previewRect = normalizeBox({
-      x1: pointerState.startX,
-      y1: pointerState.startY,
-      x2: x,
-      y2: y,
-    });
-    draw();
-    return;
-  }
-
   if (pointerState.type === "move") {
     const roi = rois[pointerState.idx];
     if (!roi) return;
@@ -1505,25 +1568,6 @@ stage.addEventListener("pointermove", (e) => {
 
 stage.addEventListener("pointerup", (e) => {
   if (!pointerState) return;
-
-  if (pointerState.type === "draw" && previewRect) {
-    if (
-      previewRect.x2 > previewRect.x1 + 2 &&
-      previewRect.y2 > previewRect.y1 + 2
-    ) {
-      rois.push({
-        x1: previewRect.x1,
-        y1: previewRect.y1,
-        x2: previewRect.x2,
-        y2: previewRect.y2,
-        score: null,
-        label: null,
-      });
-      selectedIdx = rois.length - 1;
-      lastResponse = null;
-      setMessage(t("messages.roiAdded"), "ok");
-    }
-  }
 
   previewRect = null;
   pointerState = null;
@@ -1598,6 +1642,7 @@ window.addEventListener("resize", () => {
 });
 
 // Estado inicial
+buildExampleOptions();
 applyTranslations();
 setMode();
 updateTopInfo();
