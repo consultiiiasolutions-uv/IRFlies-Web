@@ -112,8 +112,8 @@ h3{
 }
 
 .smallHead{
-  margin-top:16px;
-  margin-bottom:10px;
+  margin-top:10px;
+  margin-bottom:8px;
 }
 
 .historyHead{
@@ -134,12 +134,12 @@ h3{
   display:flex;
   gap:10px;
   align-items:center;
-  margin:10px 0;
+  margin:8px 0;
   flex-wrap:wrap;
 }
 
 .actions button{
-  min-height:44px;
+  min-height:40px;
 }
 
 label{
@@ -148,13 +148,15 @@ label{
 }
 
 input[type="text"],
-input[type="number"]{
+input[type="number"],
+select{
   max-width:100%;
   padding:10px 12px;
   border-radius:12px;
   border:1px solid var(--line);
   background:#fffdfa;
   color:var(--text);
+  font:inherit;
 }
 
 input[type="text"]{
@@ -276,12 +278,18 @@ button.activeMode{
   display:grid;
   grid-template-columns:1fr;
   gap:16px;
+  align-items:start;
 }
 
 .sideCol{
   display:grid;
-  gap:16px;
+  gap:12px;
   align-content:start;
+}
+
+.sideCol > .panel{
+  padding:14px;
+  margin-bottom:0;
 }
 
 .previewMeta{
@@ -305,12 +313,15 @@ button.activeMode{
   text-align:right;
 }
 
+.imagePanel{
+  margin-bottom:16px;
+}
+
 .imgStage{
   position:relative;
   width:100%;
   height:clamp(320px, 62vh, 760px);
-  background:
-    linear-gradient(180deg, #fffdfb 0%, #fff7f0 100%);
+  background:linear-gradient(180deg, #fffdfb 0%, #fff7f0 100%);
   border-radius:16px;
   overflow:hidden;
   border:1px solid var(--line);
@@ -389,45 +400,81 @@ button.activeMode{
 
 .helper{
   margin:10px 0 0 0;
-  line-height:1.6;
-  font-size:13px;
+  font-size:12px;
+  line-height:1.45;
+}
+
+.examplesPanel{
+  margin-top:14px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:linear-gradient(180deg,#fffaf5 0%,#fff2e8 100%);
+}
+
+.examplesHead{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-bottom:10px;
+}
+
+.examplesHint{
+  margin:0;
+  font-size:12px;
+  line-height:1.45;
+}
+
+.examplesRow{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.examplesRow select{
+  width:100%;
 }
 
 .summaryGrid{
   display:grid;
-  grid-template-columns:1fr;
-  gap:10px;
+  grid-template-columns:repeat(3,1fr);
+  gap:8px;
 }
 
 .summaryCard{
   background:linear-gradient(180deg,#fffaf5 0%,#fff2e8 100%);
   border:1px solid #f7d5bc;
-  border-radius:16px;
-  padding:14px;
+  border-radius:14px;
+  padding:10px 12px;
+}
+
+.summaryCard strong{
+  font-size:16px;
+  line-height:1.1;
 }
 
 .summaryLabel{
   display:block;
   color:var(--muted);
-  font-size:13px;
-  margin-bottom:6px;
+  font-size:12px;
+  margin-bottom:4px;
 }
 
 .summaryResultsBlock{
-  margin-top:8px;
+  margin-top:10px;
 }
 
 .currentResultsList{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:8px;
 }
 
 .resultCard{
   background:#fffdfa;
   border:1px solid var(--line);
-  border-radius:16px;
-  padding:12px;
+  border-radius:14px;
+  padding:10px;
 }
 
 .resultHead{
@@ -438,21 +485,21 @@ button.activeMode{
 }
 
 .resultTitle{
-  font-size:14px;
+  font-size:13px;
   font-weight:800;
-  margin-bottom:4px;
+  margin-bottom:2px;
 }
 
 .resultMeta{
   color:var(--muted);
-  font-size:13px;
-  line-height:1.5;
+  font-size:12px;
+  line-height:1.35;
 }
 
 .resultProbTitle{
-  margin-top:10px;
-  margin-bottom:6px;
-  font-size:12px;
+  margin-top:8px;
+  margin-bottom:4px;
+  font-size:11px;
   font-weight:800;
   color:var(--muted);
   text-transform:uppercase;
@@ -470,7 +517,7 @@ button.activeMode{
 .list{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:8px;
 }
 
 .item{
@@ -479,8 +526,8 @@ button.activeMode{
   align-items:center;
   justify-content:space-between;
   border:1px solid var(--line);
-  border-radius:16px;
-  padding:10px;
+  border-radius:14px;
+  padding:8px 10px;
   background:#fffdfa;
 }
 
@@ -494,12 +541,12 @@ button.activeMode{
 .itemTop{
   display:flex;
   align-items:center;
-  gap:8px;
+  gap:6px;
   flex-wrap:wrap;
 }
 
 .roiMeta{
-  font-size:12px;
+  font-size:11px;
   color:var(--muted);
 }
 
@@ -522,7 +569,8 @@ button.activeMode{
 }
 
 .itemActions button{
-  padding:8px 10px;
+  padding:6px 9px;
+  font-size:12px;
 }
 
 .tableWrap{
@@ -616,13 +664,73 @@ button.activeMode{
   width:100%;
 }
 
+.controlsPanel .row{
+  align-items:flex-start;
+}
+
+.controlsPanel .actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.controlsPanel .actions button{
+  flex:1 1 180px;
+}
+
+.controlsPanel .navRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.controlsPanel .infoRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.controlsPanel input[type="file"]{
+  width:100%;
+}
+
+.compactActions{
+  gap:8px;
+}
+
+.compactActions button{
+  flex:1 1 180px;
+}
+
 @media (min-width: 900px){
   .grid{
     grid-template-columns:1.25fr .75fr;
   }
+}
 
+@media (max-width: 900px){
   .summaryGrid{
-    grid-template-columns:repeat(3,1fr);
+    grid-template-columns:1fr;
+  }
+
+  .compactActions button,
+  .controlsPanel .actions button{
+    flex:1 1 100%;
+  }
+
+  .controlsPanel .navRow{
+    flex-direction:column;
+    align-items:stretch;
+  }
+
+  .controlsPanel .navRow button,
+  .controlsPanel .navRow .statusChip{
+    width:100%;
+    justify-content:center;
+  }
+
+  .resultsTable{
+    min-width:680px;
   }
 }
 
@@ -661,362 +769,8 @@ button.activeMode{
   .itemActions{
     width:100%;
   }
-}
 
-.controlsPanel .row{
-  align-items:flex-start;
-}
-
-.controlsPanel .actions{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-
-.controlsPanel .actions button{
-  flex:1 1 180px;
-}
-
-.controlsPanel .navRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-
-.controlsPanel .infoRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-}
-
-.controlsPanel input[type="file"]{
-  width:100%;
-}
-
-@media (max-width: 900px){
-  .controlsPanel .actions button{
-    flex:1 1 100%;
-  }
-
-  .controlsPanel .navRow{
-    flex-direction:column;
-    align-items:stretch;
-  }
-
-  .controlsPanel .navRow button,
-  .controlsPanel .navRow .statusChip{
-    width:100%;
-    justify-content:center;
-  }
-}
-
-.grid{
-  align-items:stretch;
-}
-
-.sideCol{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  height:100%;
-}
-
-.sideCol > .panel{
-  padding:14px;
-}
-
-.sideCol > .panel:last-child{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-}
-
-#roiList{
-  flex:1;
-  overflow:auto;
-  min-height:0;
-  gap:8px;
-}
-
-.summaryGrid{
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-}
-
-.summaryCard{
-  padding:10px 12px;
-  border-radius:14px;
-}
-
-.summaryCard strong{
-  font-size:16px;
-  line-height:1.1;
-}
-
-.summaryLabel{
-  font-size:12px;
-  margin-bottom:4px;
-}
-
-.summaryResultsBlock{
-  margin-top:10px;
-}
-
-.smallHead{
-  margin-top:10px;
-  margin-bottom:8px;
-}
-
-.currentResultsList{
-  gap:8px;
-}
-
-.resultCard{
-  padding:10px;
-  border-radius:14px;
-}
-
-.resultTitle{
-  font-size:13px;
-  margin-bottom:2px;
-}
-
-.resultMeta{
-  font-size:12px;
-  line-height:1.35;
-}
-
-.resultProbTitle{
-  margin-top:8px;
-  margin-bottom:4px;
-  font-size:11px;
-}
-
-.item{
-  padding:8px 10px;
-  border-radius:14px;
-}
-
-.itemTop{
-  gap:6px;
-}
-
-.roiMeta{
-  font-size:11px;
-}
-
-.itemActions button{
-  padding:6px 9px;
-  font-size:12px;
-}
-
-.compactActions{
-  gap:8px;
-}
-
-.compactActions button{
-  flex:1 1 180px;
-}
-
-.helper{
-  font-size:12px;
-  line-height:1.45;
-}
-
-@media (max-width: 900px){
-  .summaryGrid{
-    grid-template-columns:1fr;
-  }
-
-  .compactActions button{
-    flex:1 1 100%;
-  }
-
-  .sideCol > .panel:last-child{
-    flex:unset;
-  }
-
-  #roiList{
-    overflow:visible;
-  }
-}
-
-/* ===== Layout correcto: imagen arriba y doble columna abajo ===== */
-
-/* ===== Compactación sin cambiar la estructura original ===== */
-
-.grid{
-  align-items:start;
-}
-
-.sideCol{
-  display:grid;
-  gap:12px;
-  align-content:start;
-}
-
-.sideCol > .panel{
-  padding:14px;
-  margin-bottom:0;
-}
-
-.controlsPanel .row{
-  align-items:flex-start;
-  margin:8px 0;
-}
-
-.controlsPanel .actions{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-
-.controlsPanel .actions button{
-  flex:1 1 180px;
-  min-height:40px;
-}
-
-.controlsPanel .navRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-
-.controlsPanel .infoRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-
-.controlsPanel input[type="file"]{
-  width:100%;
-}
-
-.summaryPanelCompact .summaryGrid{
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-}
-
-.summaryPanelCompact .summaryCard{
-  padding:10px 12px;
-  border-radius:14px;
-}
-
-.summaryPanelCompact .summaryCard strong{
-  font-size:16px;
-  line-height:1.1;
-}
-
-.summaryPanelCompact .summaryLabel{
-  font-size:12px;
-  margin-bottom:4px;
-}
-
-.summaryPanelCompact .summaryResultsBlock{
-  margin-top:10px;
-}
-
-.summaryPanelCompact .smallHead{
-  margin-top:10px;
-  margin-bottom:8px;
-}
-
-.currentResultsList{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.resultCard{
-  padding:10px;
-  border-radius:14px;
-}
-
-.resultTitle{
-  font-size:13px;
-  margin-bottom:2px;
-}
-
-.resultMeta{
-  font-size:12px;
-  line-height:1.35;
-}
-
-.resultProbTitle{
-  margin-top:8px;
-  margin-bottom:4px;
-  font-size:11px;
-}
-
-.roiPanelCompact .list{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.roiPanelCompact .item{
-  padding:8px 10px;
-  border-radius:14px;
-}
-
-.roiPanelCompact .itemTop{
-  gap:6px;
-}
-
-.roiPanelCompact .roiMeta{
-  font-size:11px;
-}
-
-.roiPanelCompact .itemActions button{
-  padding:6px 9px;
-  font-size:12px;
-}
-
-.compactActions{
-  gap:8px;
-}
-
-.compactActions button{
-  flex:1 1 180px;
-}
-
-.helper{
-  font-size:12px;
-  line-height:1.45;
-}
-
-.panel{
-  margin-bottom:16px;
-}
-
-@media (min-width: 900px){
-  .grid{
-    grid-template-columns:1.25fr .75fr;
-    gap:16px;
-  }
-
-  .summaryPanelCompact .summaryGrid{
-    grid-template-columns:repeat(3,1fr);
-  }
-}
-
-@media (max-width: 900px){
-  .summaryPanelCompact .summaryGrid{
-    grid-template-columns:1fr;
-  }
-
-  .controlsPanel .actions button{
-    flex:1 1 100%;
-  }
-
-  .controlsPanel .navRow{
-    flex-direction:column;
-    align-items:stretch;
-  }
-
-  .controlsPanel .navRow button,
-  .controlsPanel .navRow .statusChip{
-    width:100%;
-    justify-content:center;
+  .resultsTable{
+    min-width:620px;
   }
 }
