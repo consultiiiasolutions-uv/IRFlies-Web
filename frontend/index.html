@@ -42,7 +42,7 @@
     </header>
 
     <div class="grid">
-      <section class="panel">
+      <section class="panel imagePanel">
         <div class="sectionHead sectionHeadBetween">
           <h2 id="imageSectionTitle">Imagen</h2>
           <div class="previewMeta">
@@ -59,6 +59,22 @@
         <p id="helperText" class="muted helper">
           Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.
         </p>
+
+        <section class="examplesPanel">
+          <div class="examplesHead">
+            <h3 id="examplesTitle">Probar ejemplos</h3>
+            <p id="examplesHint" class="muted examplesHint">
+              Selecciona un ejemplo y se cargará automáticamente.
+            </p>
+          </div>
+
+          <div class="examplesRow">
+            <label id="exampleSelectLabel" for="exampleSelect">Ejemplo</label>
+            <select id="exampleSelect">
+              <option value="">Selecciona un ejemplo…</option>
+            </select>
+          </div>
+        </section>
       </section>
 
       <section class="sideCol">
