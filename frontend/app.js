@@ -205,7 +205,7 @@ const translations = {
     },
     examples: {
       hint: "Selecciona un ejemplo y se cargará automáticamente.",
-      placeholder: "Selecciona un ejemplo…",
+      placeholder: "Selecciona un ejemplo...",
       ef8_1: "Ejemplo EF8 1",
       ef8_2: "Ejemplo EF8 2",
       ef9_1: "Ejemplo EF9 1",
@@ -342,7 +342,7 @@ const translations = {
     },
     examples: {
       hint: "Select an example and it will load automatically.",
-      placeholder: "Select an example…",
+      placeholder: "Select an example...",
       ef8_1: "EF8 example 1",
       ef8_2: "EF8 example 2",
       ef9_1: "EF9 example 1",
@@ -459,7 +459,7 @@ function updateControlStates() {
     currentFileIndex >= selectedFiles.length - 1;
   fileIn.disabled = isBusy;
   confIn.disabled = isBusy;
-  exampleSelect.disabled = isBusy;
+  if (exampleSelect) exampleSelect.disabled = isBusy;
 }
 
 function setMode() {
@@ -998,9 +998,11 @@ function exportHistoryCsv() {
 }
 
 function buildExampleOptions() {
-  const previousValue = exampleSelect.value;
+  if (!exampleSelect) return;
 
+  const previousValue = exampleSelect.value;
   exampleSelect.innerHTML = "";
+
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = t("examples.placeholder");
@@ -1032,10 +1034,6 @@ function getExampleLabel(fileName) {
   const example = EXAMPLE_FILES.find((item) => item.fileName === fileName);
   if (!example) return fileName;
   return t(`examples.${example.key}`);
-}
-
-function getExamplePath(fileName) {
-  return `./examples/${fileName}`;
 }
 
 async function pingBackend(showUserMessage = false) {
@@ -1307,10 +1305,9 @@ async function loadExampleByName(fileName) {
   const displayName = getExampleLabel(fileName);
 
   try {
-    setBusy(true);
     setMessage(t("messages.exampleLoading", { name: displayName }), "info");
 
-    const response = await fetch(getExamplePath(fileName), { cache: "no-store" });
+    const response = await fetch(`./examples/${fileName}`, { cache: "no-store" });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -1323,7 +1320,6 @@ async function loadExampleByName(fileName) {
     fileIn.value = "";
     await loadFilesIntoSession([exampleFile]);
   } catch (error) {
-    setBusy(false);
     setMessage(
       t("messages.exampleLoadError", {
         name: displayName,
@@ -1369,9 +1365,9 @@ function applyTranslations() {
   $("previewFileLabel").textContent = t("labels.currentFile");
   $("helperText").textContent = t("helper");
 
-  $("examplesTitle").textContent = t("sections.examples");
-  $("examplesHint").textContent = t("examples.hint");
-  $("exampleSelectLabel").textContent = t("labels.example");
+  if ($("examplesTitle")) $("examplesTitle").textContent = t("sections.examples");
+  if ($("examplesHint")) $("examplesHint").textContent = t("examples.hint");
+  if ($("exampleSelectLabel")) $("exampleSelectLabel").textContent = t("labels.example");
   buildExampleOptions();
 
   $("summaryTitle").textContent = t("sections.summary");
@@ -1405,16 +1401,18 @@ function applyTranslations() {
 
 // --- Archivo ---
 fileIn.addEventListener("change", async () => {
-  exampleSelect.value = "";
+  if (exampleSelect) exampleSelect.value = "";
   const files = Array.from(fileIn.files || []);
   await loadFilesIntoSession(files);
 });
 
-exampleSelect.addEventListener("change", async () => {
-  const selectedExample = exampleSelect.value;
-  if (!selectedExample) return;
-  await loadExampleByName(selectedExample);
-});
+if (exampleSelect) {
+  exampleSelect.addEventListener("change", async () => {
+    const selectedExample = exampleSelect.value;
+    if (!selectedExample) return;
+    await loadExampleByName(selectedExample);
+  });
+}
 
 prevImageBtn.addEventListener("click", () => {
   if (currentFileIndex > 0) goToImage(currentFileIndex - 1);
