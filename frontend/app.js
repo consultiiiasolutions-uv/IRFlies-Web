@@ -65,7 +65,6 @@ let currentFileIndex = -1;
 let currentObjectUrl = null;
 
 // Estado por imagen en la sesión actual
-// imageStates[i] = { rois, lastResponse, selectedIdx, detectStatus, detectError }
 let imageStates = [];
 
 // Historial acumulado de sesión
@@ -124,7 +123,7 @@ const translations = {
       select: "seleccionar",
     },
     helper:
-  "Toca o haz clic sobre un ROI para moverlo. Arrastra en una zona vacía de la imagen para crear un ROI nuevo. Usa las esquinas para redimensionarlo.",
+      "Toca o haz clic sobre un ROI para moverlo. Arrastra en una zona vacía de la imagen para crear un ROI nuevo. Usa las esquinas para redimensionarlo.",
     status: {
       backendChecking: "Backend: verificando",
       backendAvailable: "Backend: disponible",
@@ -156,6 +155,7 @@ const translations = {
       detectError:
         "No se pudo detectar automáticamente en {name}: {error}",
       roiDeleted: "ROI eliminado.",
+      roiAdded: "ROI manual agregado.",
       historyCleared: "Historial de sesión limpiado.",
       classifyDone:
         "Clasificación completada y guardada en el historial de sesión.",
@@ -174,7 +174,6 @@ const translations = {
       unexpected: "Ocurrió un error: {error}",
       exampleLoading: "Cargando ejemplo: {name}",
       exampleLoadError: "No se pudo cargar el ejemplo {name}: {error}",
-      roiAdded: "ROI manual agregado.",
     },
     roiList: {
       empty: "No hay ROIs todavía.",
@@ -262,7 +261,7 @@ const translations = {
       select: "select",
     },
     helper:
-  "Tap or click an ROI to move it. Drag on an empty area of the image to create a new ROI. Use the corners to resize it.",
+      "Tap or click an ROI to move it. Drag on an empty area of the image to create a new ROI. Use the corners to resize it.",
     status: {
       backendChecking: "Backend: checking",
       backendAvailable: "Backend: available",
@@ -294,6 +293,7 @@ const translations = {
       detectError:
         "Automatic detection failed for {name}: {error}",
       roiDeleted: "ROI deleted.",
+      roiAdded: "Manual ROI added.",
       historyCleared: "Session history cleared.",
       classifyDone:
         "Classification completed and saved in session history.",
@@ -312,7 +312,6 @@ const translations = {
       unexpected: "An error occurred: {error}",
       exampleLoading: "Loading example: {name}",
       exampleLoadError: "Could not load example {name}: {error}",
-      roiAdded: "Manual ROI added.",
     },
     roiList: {
       empty: "There are no ROIs yet.",
@@ -603,6 +602,21 @@ function getDisplayMetrics() {
     dispHeight,
     scale,
   };
+}
+
+function isInsideDisplayedImage(clientX, clientY) {
+  if (!img.naturalWidth || !img.naturalHeight) return false;
+
+  const m = getDisplayMetrics();
+  const localX = clientX - m.stageRect.left;
+  const localY = clientY - m.stageRect.top;
+
+  return (
+    localX >= m.dispLeft &&
+    localX <= m.dispLeft + m.dispWidth &&
+    localY >= m.dispTop &&
+    localY <= m.dispTop + m.dispHeight
+  );
 }
 
 function clientToImageCoords(clientX, clientY) {
@@ -1443,6 +1457,7 @@ function applyTranslations() {
   renderHistory();
   syncTranslatedMessage();
 }
+
 // --- Archivo ---
 fileIn.addEventListener("change", async () => {
   if (exampleSelect) exampleSelect.value = "";
@@ -1569,35 +1584,6 @@ stage.addEventListener("pointerdown", (e) => {
   updateTopInfo();
 });
 
-  if (box) {
-    const idx = Number(box.dataset.idx);
-    selectedIdx = idx;
-
-    const roi = rois[idx];
-    const { x, y } = clientToImageCoords(e.clientX, e.clientY);
-
-    pointerState = {
-      type: "move",
-      idx,
-      startX: x,
-      startY: y,
-      orig: { ...roi },
-      pointerId: e.pointerId,
-    };
-
-    stage.setPointerCapture(e.pointerId);
-    saveCurrentImageState();
-    draw();
-    updateTopInfo();
-    return;
-  }
-
-  selectedIdx = null;
-  saveCurrentImageState();
-  draw();
-  updateTopInfo();
-});
-
 stage.addEventListener("pointermove", (e) => {
   if (!pointerState) return;
 
@@ -1697,6 +1683,13 @@ stage.addEventListener("pointerup", (e) => {
   saveCurrentImageState();
   draw();
   updateTopInfo();
+});
+
+stage.addEventListener("pointercancel", () => {
+  pointerState = null;
+  previewRect = null;
+  saveCurrentImageState();
+  draw();
 });
 
 // --- Clasificación ---
