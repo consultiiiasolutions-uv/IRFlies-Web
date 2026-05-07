@@ -2,9 +2,11 @@ import io
 from PIL import Image, ImageDraw
 from .schemas import RoiXYXY
 
+from PIL import Image, ImageDraw, ImageOps
 
 def load_image_rgb(image_bytes: bytes) -> Image.Image:
     img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
     return img.convert("RGB")
 
 
