@@ -47,6 +47,8 @@ const EXAMPLE_FILES = [
   { fileName: "ef9_2.JPG", key: "ef9_2" },
 ];
 
+const STARTUP_EXAMPLE_FILE = "ef8_1.jpg";
+
 let currentLang = localStorage.getItem("irflies_lang") || "es";
 
 let rois = [];
@@ -1674,13 +1676,22 @@ window.addEventListener("resize", () => {
 });
 
 // Estado inicial
-buildExampleOptions();
-applyTranslations();
-setMode();
-updateTopInfo();
-renderSummary();
-renderResults();
-renderRoiList();
-renderHistory();
-setMessage(t("messages.initial"), "info");
-pingBackend(false);
+async function initializeApp() {
+  buildExampleOptions();
+  applyTranslations();
+  setMode();
+  updateTopInfo();
+  renderSummary();
+  renderResults();
+  renderRoiList();
+  renderHistory();
+  setMessage(t("messages.initial"), "info");
+  pingBackend(false);
+
+  if (exampleSelect) {
+    exampleSelect.value = STARTUP_EXAMPLE_FILE;
+    await loadExampleByName(STARTUP_EXAMPLE_FILE);
+  }
+}
+
+initializeApp();
