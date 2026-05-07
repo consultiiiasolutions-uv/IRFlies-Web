@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response, JSONResponse
 from typing import Optional
 import io
-from PIL import Image
+from PIL import Image, ImageOps
 import json
 
 from .config import settings
@@ -145,7 +145,7 @@ async def pipeline_upload(
     if not rois:
         return PipelineResponse(rois=[], predictions=[])
 
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
     w_img, h_img = img.size
 
     invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
@@ -188,7 +188,7 @@ def pipeline_gcs(payload: PipelineGcsRequest):
     if not rois:
         return PipelineResponse(rois=[], predictions=[])
 
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
     w_img, h_img = img.size
 
     invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
