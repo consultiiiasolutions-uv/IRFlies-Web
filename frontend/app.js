@@ -124,7 +124,7 @@ const translations = {
       select: "seleccionar",
     },
     helper:
-      "Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.",
+  "Toca o haz clic sobre un ROI para moverlo. Arrastra en una zona vacía de la imagen para crear un ROI nuevo. Usa las esquinas para redimensionarlo.",
     status: {
       backendChecking: "Backend: verificando",
       backendAvailable: "Backend: disponible",
@@ -174,6 +174,7 @@ const translations = {
       unexpected: "Ocurrió un error: {error}",
       exampleLoading: "Cargando ejemplo: {name}",
       exampleLoadError: "No se pudo cargar el ejemplo {name}: {error}",
+      roiAdded: "ROI manual agregado.",
     },
     roiList: {
       empty: "No hay ROIs todavía.",
@@ -261,7 +262,7 @@ const translations = {
       select: "select",
     },
     helper:
-      "Tap or click an ROI to move it. Use the corners to resize it.",
+  "Tap or click an ROI to move it. Drag on an empty area of the image to create a new ROI. Use the corners to resize it.",
     status: {
       backendChecking: "Backend: checking",
       backendAvailable: "Backend: available",
@@ -311,6 +312,7 @@ const translations = {
       unexpected: "An error occurred: {error}",
       exampleLoading: "Loading example: {name}",
       exampleLoadError: "Could not load example {name}: {error}",
+      roiAdded: "Manual ROI added.",
     },
     roiList: {
       empty: "There are no ROIs yet.",
@@ -437,6 +439,12 @@ function resetVisualStateOnly() {
 function setMessage(text, type = "info") {
   msg.textContent = text;
   msg.className = `msg ${type}`;
+}
+
+function clearRoiDerivedValues(roi) {
+  if (!roi) return;
+  roi.label = null;
+  roi.score = null;
 }
 
 function syncTranslatedMessage() {
@@ -1493,13 +1501,14 @@ stage.addEventListener("pointerdown", (e) => {
   const handle = e.target.closest(".handle");
   const box = e.target.closest(".box");
 
+  const insideImage = isInsideDisplayedImage(e.clientX, e.clientY);
+  const { x, y } = clientToImageCoords(e.clientX, e.clientY);
+
   if (handle) {
     const idx = Number(handle.dataset.idx);
     selectedIdx = idx;
 
     const roi = rois[idx];
-    const { x, y } = clientToImageCoords(e.clientX, e.clientY);
-
     pointerState = {
       type: "resize",
       idx,
@@ -1516,6 +1525,49 @@ stage.addEventListener("pointerdown", (e) => {
     updateTopInfo();
     return;
   }
+
+  if (box) {
+    const idx = Number(box.dataset.idx);
+    selectedIdx = idx;
+
+    const roi = rois[idx];
+    pointerState = {
+      type: "move",
+      idx,
+      startX: x,
+      startY: y,
+      orig: { ...roi },
+      pointerId: e.pointerId,
+    };
+
+    stage.setPointerCapture(e.pointerId);
+    saveCurrentImageState();
+    draw();
+    updateTopInfo();
+    return;
+  }
+
+  if (insideImage) {
+    selectedIdx = null;
+    pointerState = {
+      type: "draw",
+      startX: x,
+      startY: y,
+      pointerId: e.pointerId,
+    };
+    previewRect = { x1: x, y1: y, x2: x, y2: y };
+
+    stage.setPointerCapture(e.pointerId);
+    draw();
+    updateTopInfo();
+    return;
+  }
+
+  selectedIdx = null;
+  saveCurrentImageState();
+  draw();
+  updateTopInfo();
+});
 
   if (box) {
     const idx = Number(box.dataset.idx);
@@ -1551,6 +1603,17 @@ stage.addEventListener("pointermove", (e) => {
 
   const { x, y } = clientToImageCoords(e.clientX, e.clientY);
 
+  if (pointerState.type === "draw") {
+    previewRect = normalizeBox({
+      x1: pointerState.startX,
+      y1: pointerState.startY,
+      x2: x,
+      y2: y,
+    });
+    draw();
+    return;
+  }
+
   if (pointerState.type === "move") {
     const roi = rois[pointerState.idx];
     if (!roi) return;
@@ -1572,6 +1635,7 @@ stage.addEventListener("pointermove", (e) => {
     roi.x2 = Math.round(nx1 + w);
     roi.y2 = Math.round(ny1 + h);
 
+    clearRoiDerivedValues(roi);
     lastResponse = null;
     draw();
     return;
@@ -1595,6 +1659,7 @@ stage.addEventListener("pointermove", (e) => {
     roi.x2 = next.x2;
     roi.y2 = next.y2;
 
+    clearRoiDerivedValues(roi);
     lastResponse = null;
     draw();
   }
@@ -1602,6 +1667,25 @@ stage.addEventListener("pointermove", (e) => {
 
 stage.addEventListener("pointerup", (e) => {
   if (!pointerState) return;
+
+  if (pointerState.type === "draw" && previewRect) {
+    if (
+      previewRect.x2 > previewRect.x1 + 2 &&
+      previewRect.y2 > previewRect.y1 + 2
+    ) {
+      rois.push({
+        x1: previewRect.x1,
+        y1: previewRect.y1,
+        x2: previewRect.x2,
+        y2: previewRect.y2,
+        score: null,
+        label: null,
+      });
+      selectedIdx = rois.length - 1;
+      lastResponse = null;
+      setMessage(t("messages.roiAdded"), "ok");
+    }
+  }
 
   previewRect = null;
   pointerState = null;
@@ -1613,13 +1697,6 @@ stage.addEventListener("pointerup", (e) => {
   saveCurrentImageState();
   draw();
   updateTopInfo();
-});
-
-stage.addEventListener("pointercancel", () => {
-  pointerState = null;
-  previewRect = null;
-  saveCurrentImageState();
-  draw();
 });
 
 // --- Clasificación ---
