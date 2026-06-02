@@ -3,9 +3,9 @@ import os
 import logging
 import tempfile
 import threading
+import hashlib
 from typing import List, Optional, Tuple
 
-import numpy as np
 from PIL import Image, ImageOps
 from google.cloud import storage
 
@@ -38,10 +38,13 @@ def _parse_gcs_uri(uri: str) -> Tuple[str, str]:
     return bucket, blob
 
 
-def _cache_path_for_uri(model_uri: str) -> str:
+def _cache_path_for_uri(model_uri: str, generation: Optional[str] = None) -> str:
+    """Cachea por URI + generación para evitar usar pesos viejos si se sobrescribe el .pt."""
     base_dir = "/tmp/irflies_models"
     os.makedirs(base_dir, exist_ok=True)
-    return os.path.join(base_dir, "eyes_yolo.pt")
+    key = model_uri if generation is None else f"{model_uri}#generation={generation}"
+    h = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return os.path.join(base_dir, f"yolo_{h}.pt")
 
 
 def _ensure_weights_local(model_uri: str) -> str:
@@ -50,25 +53,34 @@ def _ensure_weights_local(model_uri: str) -> str:
             raise RuntimeError(f"Modelo YOLO local inválido: {model_uri}")
         return model_uri
 
-    local_path = _cache_path_for_uri(model_uri)
-
     bucket_name, blob_name = _parse_gcs_uri(model_uri)
     client = _get_gcs_client()
     blob = client.bucket(bucket_name).blob(blob_name)
     blob.reload()
+
     expected = int(blob.size) if blob.size is not None else None
+    generation = str(blob.generation) if blob.generation is not None else None
+    local_path = _cache_path_for_uri(model_uri, generation=generation)
 
-    if os.path.exists(local_path) and expected and os.path.getsize(local_path) == expected:
-        return local_path
+    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+        if expected is None or os.path.getsize(local_path) == expected:
+            return local_path
+        log.warning("Cache YOLO con tamaño distinto. Se redescarga. local=%s expected=%s", os.path.getsize(local_path), expected)
+        try:
+            os.remove(local_path)
+        except Exception:
+            pass
 
-    with tempfile.NamedTemporaryFile(prefix="dl_", suffix=".pt", dir=os.path.dirname(local_path), delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(prefix="dl_yolo_", suffix=".pt", dir=os.path.dirname(local_path), delete=False) as tmp:
         tmp_path = tmp.name
 
     try:
-        log.info("Descargando YOLO weights: %s -> %s (expected=%s)", model_uri, tmp_path, expected)
+        log.info("Descargando YOLO weights: %s -> %s (expected=%s generation=%s)", model_uri, tmp_path, expected, generation)
         blob.download_to_filename(tmp_path)
 
         got = os.path.getsize(tmp_path)
+        if got <= 0:
+            raise RuntimeError("Descarga YOLO vacía")
         if expected is not None and got != expected:
             raise RuntimeError(f"Descarga truncada: expected={expected} got={got}")
 
@@ -95,7 +107,7 @@ def _load_yolo_if_needed():
 
         from ultralytics import YOLO
 
-        model_uri = (getattr(settings, "yolo_model_uri", None) or os.getenv("IRFLIES_YOLO_MODEL_URI", "")).strip()
+        model_uri = (settings.yolo_model_uri or os.getenv("IRFLIES_YOLO_MODEL_URI", "")).strip()
         if not model_uri:
             raise RuntimeError("Falta IRFLIES_YOLO_MODEL_URI")
 
@@ -106,17 +118,19 @@ def _load_yolo_if_needed():
         return _YOLO
 
 
-def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
-    """
-    Detección alineada con la lógica del escritorio:
-    - EXIF transpose
-    - RGB
-    - guardar temporal
-    - source=path
-    - sin NMS manual extra
+def detect_rois(image_bytes: bytes, conf: Optional[float] = None) -> List[RoiXYXY]:
+    """Detecta hasta seis regiones de ojos según IRFLIES_YOLO_MAX_DETECTIONS.
+
+    El flujo replica lo más importante del escritorio: corrige orientación EXIF, convierte a RGB,
+    guarda temporalmente la imagen y entrega una ruta local a Ultralytics. No se aplica NMS manual
+    adicional porque Ultralytics ya lo hace internamente.
     """
     if not settings.yolo_enabled:
         return []
+
+    effective_conf = settings.default_detection_conf if conf is None else float(conf)
+    max_det = max(1, int(settings.yolo_max_detections or 6))
+    iou = float(settings.yolo_iou_thresh or 0.60)
 
     img = Image.open(io.BytesIO(image_bytes))
     img = ImageOps.exif_transpose(img).convert("RGB")
@@ -130,29 +144,37 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
     try:
         img.save(tmp_path)
 
-        log.info("[yolo] predict conf=%.4f tmp_path=%s size=(%d,%d)", conf, tmp_path, w_img, h_img)
+        log.info(
+            "[yolo] predict conf=%.4f iou=%.4f max_det=%d tmp_path=%s size=(%d,%d)",
+            effective_conf,
+            iou,
+            max_det,
+            tmp_path,
+            w_img,
+            h_img,
+        )
 
         res = yolo.predict(
             source=tmp_path,
-            conf=float(conf),
+            conf=effective_conf,
+            iou=iou,
+            max_det=max_det,
             verbose=False,
         )[0]
-
-        rois: List[RoiXYXY] = []
 
         if res.boxes is None or len(res.boxes) == 0:
             log.info("[yolo] sin detecciones")
             return []
 
         names = getattr(res, "names", None) or getattr(yolo, "names", None) or {}
+        rois: List[RoiXYXY] = []
 
         for box in res.boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
-
             x1 = int(max(0, min(w_img - 1, round(x1))))
             y1 = int(max(0, min(h_img - 1, round(y1))))
-            x2 = int(max(0, min(w_img - 1, round(x2))))
-            y2 = int(max(0, min(h_img - 1, round(y2))))
+            x2 = int(max(0, min(w_img, round(x2))))
+            y2 = int(max(0, min(h_img, round(y2))))
 
             if x2 <= x1 or y2 <= y1:
                 continue
@@ -173,6 +195,7 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
             )
 
         rois.sort(key=lambda r: (r.score if r.score is not None else -1.0), reverse=True)
+        rois = rois[:max_det]
 
         log.info(
             "[yolo] detecciones=%s",
@@ -181,10 +204,7 @@ def detect_rois(image_bytes: bytes, conf: float = 0.25) -> List[RoiXYXY]:
                 for r in rois
             ],
         )
-
-        # Si quieres solo la mejor detección:
-        max_det = int(os.getenv("IRFLIES_YOLO_MAX_DETECTIONS", "1"))
-        return rois[:max_det]
+        return rois
 
     finally:
         try:
