@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 
 class RoiXYXY(BaseModel):
@@ -48,9 +48,10 @@ class SignedUploadUrlResponse(BaseModel):
     object_name: str
     expires_in_seconds: int
 
+
 class PipelineGcsRequest(BaseModel):
     gcs_uri: str
-    conf: float = 0.03
+    conf: float = 0.25
     rois: List[RoiXYXY] = Field(default_factory=list)
 
 
@@ -63,3 +64,16 @@ class RoiPrediction(BaseModel):
 class PipelineResponse(BaseModel):
     rois: List[RoiXYXY] = Field(default_factory=list)
     predictions: List[RoiPrediction] = Field(default_factory=list)
+
+
+class ApiConfigResponse(BaseModel):
+    yolo_enabled: bool
+    yolo_max_detections: int
+    yolo_iou_thresh: float
+    default_detection_conf: float
+    classifier_enabled: bool
+    classifier_labels: List[str] = Field(default_factory=list)
+    classifier_preprocess: str
+    classifier_output_mode: str
+    model_uris_configured: Dict[str, bool] = Field(default_factory=dict)
+    extra: Dict[str, Any] = Field(default_factory=dict)
