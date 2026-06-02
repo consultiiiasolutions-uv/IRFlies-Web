@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response, JSONResponse
-from typing import Optional
+from typing import Optional, List
 import io
 from PIL import Image, ImageOps
 import json
@@ -18,6 +18,7 @@ from .schemas import (
     PipelineGcsRequest,
     PipelineResponse,
     RoiPrediction,
+    ApiConfigResponse,
 )
 from .preview_service import build_preview_png
 from .storage import (
@@ -31,7 +32,7 @@ from .yolo_service import detect_rois
 from .classifier_service import classify_image, classify_crops_batch
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="IRFlies API", version="1.0.0")
+app = FastAPI(title="IRFlies API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,41 +42,96 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def _enforce_max_size(data: bytes) -> None:
     max_bytes = settings.max_upload_mb * 1024 * 1024
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail=f"Imagen excede límite de {settings.max_upload_mb}MB")
 
 
-@app.get("/health")
-def health():
-    return {"ok": True}
-
-
-# --------------------
-# Preview (upload)
-# --------------------
-@app.post("/v1/preview/upload")
-async def preview_upload(
-    file: UploadFile = File(...),
-    rois_json: str = Form(default="[]"),  # JSON string list[{"x1":..,"y1":..,"x2":..,"y2":..}]
-):
-    image_bytes = await file.read()
-    _enforce_max_size(image_bytes)
-
+def _parse_rois_json(rois_json: str) -> List[RoiXYXY]:
     try:
         rois_raw = json.loads(rois_json) if rois_json else []
-        rois = [RoiXYXY(**r) for r in rois_raw]
+        if not isinstance(rois_raw, list):
+            raise ValueError("rois_json debe ser una lista")
+        return [RoiXYXY(**r) for r in rois_raw]
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"rois_json inválido: {e}")
 
+
+def _crop_and_classify(image_bytes: bytes, rois: List[RoiXYXY]) -> PipelineResponse:
+    if not rois:
+        return PipelineResponse(rois=[], predictions=[])
+
+    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
+    w_img, h_img = img.size
+
+    invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
+    predictions: List[RoiPrediction] = []
+    crops = []
+    crop_map = []
+    clamped_rois: List[RoiXYXY] = []
+
+    for i, roi in enumerate(rois):
+        x1 = max(0, min(w_img - 1, int(roi.x1)))
+        y1 = max(0, min(h_img - 1, int(roi.y1)))
+        x2 = max(0, min(w_img, int(roi.x2)))
+        y2 = max(0, min(h_img, int(roi.y2)))
+        roi_clamped = RoiXYXY(x1=x1, y1=y1, x2=x2, y2=y2, score=roi.score, label=roi.label)
+        clamped_rois.append(roi_clamped)
+
+        predictions.append(RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid))
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        crops.append(img.crop((x1, y1, x2, y2)))
+        crop_map.append(i)
+
+    if crops:
+        cls_list = classify_crops_batch(crops)
+        for k, cls in enumerate(cls_list):
+            predictions[crop_map[k]].classification = cls
+
+    return PipelineResponse(rois=clamped_rois, predictions=predictions)
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "version": app.version}
+
+
+@app.get("/v1/config", response_model=ApiConfigResponse)
+def api_config():
+    labels = [x.strip() for x in (settings.classifier_labels_csv or "").split(",") if x.strip()]
+    return ApiConfigResponse(
+        yolo_enabled=settings.yolo_enabled,
+        yolo_max_detections=settings.yolo_max_detections,
+        yolo_iou_thresh=settings.yolo_iou_thresh,
+        default_detection_conf=settings.default_detection_conf,
+        classifier_enabled=settings.classifier_enabled,
+        classifier_labels=labels,
+        classifier_preprocess=settings.classifier_preprocess,
+        classifier_output_mode=settings.classifier_output_mode,
+        model_uris_configured={
+            "yolo": bool(settings.yolo_model_uri),
+            "classifier": bool(settings.classifier_model_uri),
+        },
+    )
+
+
+# --------------------
+# Preview (upload / GCS)
+# --------------------
+@app.post("/v1/preview/upload")
+async def preview_upload(file: UploadFile = File(...), rois_json: str = Form(default="[]")):
+    image_bytes = await file.read()
+    _enforce_max_size(image_bytes)
+    rois = _parse_rois_json(rois_json)
     png = build_preview_png(image_bytes, rois)
     return Response(content=png, media_type="image/png")
 
 
-# --------------------
-# Preview (GCS)
-# --------------------
 @app.post("/v1/preview/gcs")
 def preview_gcs(payload: PreviewGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
@@ -88,7 +144,7 @@ def preview_gcs(payload: PreviewGcsRequest):
 # Detect (upload / GCS)
 # --------------------
 @app.post("/v1/detect/upload", response_model=DetectResponse)
-async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=0.30)):
+async def detect_upload(file: UploadFile = File(...), conf: float = Form(default=settings.default_detection_conf)):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
     rois = detect_rois(image_bytes, conf=conf)
@@ -121,104 +177,31 @@ def classify_gcs(payload: ClassifyGcsRequest):
 
 
 # --------------------
-# Pipeline (detect -> crop -> classify)  [BATCH + manual ROIs]
+# Pipeline: detect -> crop -> classify; también modo manual con ROIs
 # --------------------
 @app.post("/v1/pipeline/upload", response_model=PipelineResponse)
 async def pipeline_upload(
     file: UploadFile = File(...),
-    conf: float = Form(default=0.30),
-    rois_json: str = Form(default=""),  # modo manual
+    conf: float = Form(default=settings.default_detection_conf),
+    rois_json: str = Form(default=""),
 ):
     image_bytes = await file.read()
     _enforce_max_size(image_bytes)
 
-    # 1) Decide ROIs: manual (rois_json) o YOLO
-    if rois_json and rois_json.strip() and rois_json.strip() != "[]":
-        try:
-            rois_raw = json.loads(rois_json)
-            rois = [RoiXYXY(**r) for r in (rois_raw or [])]
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"rois_json inválido: {e}")
+    if rois_json and rois_json.strip():
+        rois = _parse_rois_json(rois_json)
     else:
         rois = detect_rois(image_bytes, conf=conf)
 
-    if not rois:
-        return PipelineResponse(rois=[], predictions=[])
-
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
-    w_img, h_img = img.size
-
-    invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
-    predictions: list[RoiPrediction] = [None] * len(rois)  # type: ignore
-    crops = []
-    crop_map = []
-
-    for i, roi in enumerate(rois):
-        x1 = max(0, min(w_img - 1, int(roi.x1)))
-        y1 = max(0, min(h_img - 1, int(roi.y1)))
-        x2 = max(0, min(w_img, int(roi.x2)))
-        y2 = max(0, min(h_img, int(roi.y2)))
-
-        roi_clamped = RoiXYXY(x1=x1, y1=y1, x2=x2, y2=y2, score=roi.score, label=roi.label)
-
-        if x2 <= x1 or y2 <= y1:
-            predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
-            continue
-
-        crops.append(img.crop((x1, y1, x2, y2)))
-        crop_map.append(i)
-        predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
-
-    if crops:
-        cls_list = classify_crops_batch(crops)
-        for k, cls in enumerate(cls_list):
-            i = crop_map[k]
-            predictions[i].classification = cls  # type: ignore
-
-    return PipelineResponse(rois=rois, predictions=predictions)
+    return _crop_and_classify(image_bytes, rois)
 
 
 @app.post("/v1/pipeline/gcs", response_model=PipelineResponse)
 def pipeline_gcs(payload: PipelineGcsRequest):
     image_bytes = download_bytes(payload.gcs_uri)
     _enforce_max_size(image_bytes)
-
-    rois = payload.rois if getattr(payload, "rois", None) else detect_rois(image_bytes, conf=payload.conf)
-
-    if not rois:
-        return PipelineResponse(rois=[], predictions=[])
-
-    img = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGB")
-    w_img, h_img = img.size
-
-    invalid = ClassifyResponse(label="invalid_roi", score=0.0, probs={})
-    predictions: list[RoiPrediction] = [None] * len(rois)  # type: ignore
-    crops = []
-    crop_map = []
-
-    for i, roi in enumerate(rois):
-        x1 = max(0, min(w_img - 1, int(roi.x1)))
-        y1 = max(0, min(h_img - 1, int(roi.y1)))
-        x2 = max(0, min(w_img, int(roi.x2)))
-        y2 = max(0, min(h_img, int(roi.y2)))
-
-        roi_clamped = RoiXYXY(x1=x1, y1=y1, x2=x2, y2=y2, score=roi.score, label=roi.label)
-
-        if x2 <= x1 or y2 <= y1:
-            predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
-            continue
-
-        crops.append(img.crop((x1, y1, x2, y2)))
-        crop_map.append(i)
-        predictions[i] = RoiPrediction(roi_index=i, roi=roi_clamped, classification=invalid)
-
-    if crops:
-        cls_list = classify_crops_batch(crops)
-        for k, cls in enumerate(cls_list):
-            i = crop_map[k]
-            predictions[i].classification = cls  # type: ignore
-
-    return PipelineResponse(rois=rois, predictions=predictions)
+    rois = payload.rois if payload.rois else detect_rois(image_bytes, conf=payload.conf)
+    return _crop_and_classify(image_bytes, rois)
 
 
 # --------------------
