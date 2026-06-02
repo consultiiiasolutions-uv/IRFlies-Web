@@ -1,10 +1,13 @@
 substitutions:
   _DEPLOY_REGION: northamerica-south1
   _AR_HOSTNAME: northamerica-south1-docker.pkg.dev
-  _AR_REPOSITORY: irflies
+  _AR_REPOSITORY: irflies-backend
   _SERVICE_NAME: irflies-api
   _IMAGE_NAME: irflies-api
   _RUN_SA: irflies-api-sa@irflies-uv.iam.gserviceaccount.com
+  _YOLO_MODEL_URI: gs://irflies-uv-models/yolo/eyes_yolo_uno_dos_ojos_v1.pt
+  _CLASSIFIER_MODEL_URI: gs://irflies-uv-models/classification/irflies_classifier_uno_dos_ojos_v1.h5
+  _CLASSIFIER_LABELS_CSV: ef8,ef9
 
 steps:
   - name: "gcr.io/cloud-builders/docker"
@@ -39,8 +42,9 @@ steps:
         "--concurrency", "1",
         "--cpu", "1",
         "--memory", "2Gi",
+        "--timeout", "900",
         "--set-env-vars",
-        "^@^IRFLIES_MODELS_BUCKET=irflies-uv-models@IRFLIES_TMP_BUCKET=irflies-uv-tmp@IRFLIES_MAX_UPLOAD_MB=10@IRFLIES_SIGNED_URL_TTL_SECONDS=900@IRFLIES_YOLO_ENABLED=true@IRFLIES_YOLO_MODEL_URI=gs://irflies-uv-models/yolo/eyes_yolov8n_best.pt@IRFLIES_YOLO_MAX_DETECTIONS=2@IRFLIES_CLASSIFIER_ENABLED=true@IRFLIES_CLASSIFIER_MODEL_URI=gs://irflies-uv-models/classification/refit_model_fixed.h5@IRFLIES_CLASSIFIER_LABELS_CSV=ef8,ef9"
+        "^@^IRFLIES_MODELS_BUCKET=irflies-uv-models@IRFLIES_TMP_BUCKET=irflies-uv-tmp@IRFLIES_MAX_UPLOAD_MB=10@IRFLIES_SIGNED_URL_TTL_SECONDS=900@IRFLIES_DEFAULT_DETECTION_CONF=0.25@IRFLIES_YOLO_ENABLED=true@IRFLIES_YOLO_MODEL_URI=${_YOLO_MODEL_URI}@IRFLIES_YOLO_MAX_DETECTIONS=6@IRFLIES_YOLO_IOU_THRESH=0.6@IRFLIES_CLASSIFIER_ENABLED=true@IRFLIES_CLASSIFIER_MODEL_URI=${_CLASSIFIER_MODEL_URI}@IRFLIES_CLASSIFIER_LABELS_CSV=${_CLASSIFIER_LABELS_CSV}@IRFLIES_CLASSIFIER_PREPROCESS=efficientnetv2@IRFLIES_CLASSIFIER_OUTPUT_MODE=auto"
       ]
 
 images:
