@@ -14,6 +14,7 @@ const pingOut = $("pingOut");
 const backendStatus = $("backendStatus");
 const langToggleBtn = $("langToggleBtn");
 
+const detectBtn = $("detectBtn");
 const classifyBtn = $("classifyBtn");
 const openOriginalBtn = $("openOriginalBtn");
 const clearHistoryBtn = $("clearHistoryBtn");
@@ -22,6 +23,7 @@ const exportCsvBtn = $("exportCsvBtn");
 const prevImageBtn = $("prevImageBtn");
 const nextImageBtn = $("nextImageBtn");
 const imagePosition = $("imagePosition");
+const autoDetectOnLoad = $("autoDetectOnLoad");
 
 const msg = $("msg");
 const modeOut = $("modeOut");
@@ -84,7 +86,7 @@ const translations = {
       brand: "IRFlies-Web",
       title: "Detección y clasificación de ojos",
       text:
-        "Carga una o varias imágenes, navega una por una, detecta ojos automáticamente, corrige los ROIs si hace falta y clasifica después. El historial de resultados se conserva durante toda la sesión.",
+        "Carga una o varias imágenes, detecta hasta seis ojos automáticamente, corrige los ROIs si hace falta y clasifica cada región para estimar la edad fisiológica. El historial se conserva durante toda la sesión.",
     },
     tools: {
       summary: "Herramientas técnicas",
@@ -106,6 +108,7 @@ const translations = {
       examples: "Probar ejemplos",
     },
     buttons: {
+      detect: "Detectar ojos",
       classify: "Clasificar ROIs",
       openOriginal: "Ver imagen completa",
       exportCsv: "Exportar CSV",
@@ -118,6 +121,7 @@ const translations = {
       dominantClass: "Clase dominante",
       meanScore: "Score medio",
       example: "Ejemplo",
+      autoDetectOnLoad: "Detectar automáticamente al cargar",
     },
     modes: {
       select: "seleccionar",
@@ -139,7 +143,7 @@ const translations = {
     },
     messages: {
       initial:
-        "Sube una o varias imágenes para comenzar. Al cargarlas, la detección se ejecutará automáticamente.",
+        "Sube una o varias imágenes para comenzar. Puedes detectar hasta seis ojos y después clasificar los ROIs.",
       noImageSelected: "No hay imagen seleccionada.",
       backendOk: "El backend está disponible.",
       backendBad: "El backend respondió, pero no confirmó un estado correcto.",
@@ -149,11 +153,14 @@ const translations = {
       imageReadyWithRois:
         "Imagen cargada: {name}. Hay {count} ROI(s) listos para revisar o clasificar.",
       imageReadyNoDetected:
-        "Imagen cargada: {name}. No se detectaron ojos; puedes ajustar el ROI si hace falta.",
+        "Imagen cargada: {name}. No hay ROIs todavía; puedes detectar ojos o dibujar uno manualmente.",
       imageDetecting:
         "Imagen cargada: {name}. La detección automática sigue en proceso.",
       detectError:
         "No se pudo detectar automáticamente en {name}: {error}",
+      detectCurrentStart: "Detectando ojos en la imagen actual: {name}",
+      detectCurrentDone: "Detección lista para {name}. ROIs detectados: {count}.",
+      detectCurrentNoRois: "No se detectaron ojos en {name}. Puedes dibujar el ROI manualmente.",
       roiDeleted: "ROI eliminado.",
       roiAdded: "ROI manual agregado.",
       historyCleared: "Historial de sesión limpiado.",
@@ -163,7 +170,7 @@ const translations = {
       exportDone: "Archivo CSV exportado.",
       exportEmpty: "No hay historial para exportar.",
       autoDetectStart:
-        "Se inició la detección automática para {count} imagen(es).",
+        "Se inició la detección automática para {count} imagen(es). Se conservarán hasta seis ROIs por imagen.",
       autoDetectProgress:
         "Detectando ojos en {current} de {total}: {name}",
       autoDetectCompleted:
@@ -222,7 +229,7 @@ const translations = {
       brand: "IRFlies-Web",
       title: "Eye detection and classification",
       text:
-        "Upload one or more images, move through them one by one, detect eyes automatically, adjust ROIs if needed, and classify afterward. Session history is preserved during the whole session.",
+        "Upload one or more images, automatically detect one or two eyes, adjust ROIs if needed, and classify each region to estimate physiological age. Session history is preserved during the whole session.",
     },
     tools: {
       summary: "Technical tools",
@@ -244,6 +251,7 @@ const translations = {
       examples: "Try examples",
     },
     buttons: {
+      detect: "Detect eyes",
       classify: "Classify ROIs",
       openOriginal: "View full image",
       exportCsv: "Export CSV",
@@ -256,6 +264,7 @@ const translations = {
       dominantClass: "Dominant class",
       meanScore: "Mean score",
       example: "Example",
+      autoDetectOnLoad: "Detect automatically on load",
     },
     modes: {
       select: "select",
@@ -277,7 +286,7 @@ const translations = {
     },
     messages: {
       initial:
-        "Upload one or more images to begin. Automatic detection will run as soon as they are loaded.",
+        "Upload one or more images to begin. You can detect one or two eyes and then classify the ROIs.",
       noImageSelected: "No image selected.",
       backendOk: "The backend is available.",
       backendBad: "The backend responded, but did not confirm a valid state.",
@@ -287,11 +296,14 @@ const translations = {
       imageReadyWithRois:
         "Image loaded: {name}. There are {count} ROI(s) ready to review or classify.",
       imageReadyNoDetected:
-        "Image loaded: {name}. No eyes were detected; you can adjust the ROI if needed.",
+        "Image loaded: {name}. There are no ROIs yet; you can detect eyes or draw one manually.",
       imageDetecting:
         "Image loaded: {name}. Automatic detection is still in progress.",
       detectError:
         "Automatic detection failed for {name}: {error}",
+      detectCurrentStart: "Detecting eyes in the current image: {name}",
+      detectCurrentDone: "Detection ready for {name}. Detected ROIs: {count}.",
+      detectCurrentNoRois: "No eyes were detected in {name}. You can draw the ROI manually.",
       roiDeleted: "ROI deleted.",
       roiAdded: "Manual ROI added.",
       historyCleared: "Session history cleared.",
@@ -301,7 +313,7 @@ const translations = {
       exportDone: "CSV file exported.",
       exportEmpty: "There is no history to export.",
       autoDetectStart:
-        "Automatic detection started for {count} image(s).",
+        "Automatic detection started for {count} image(s). Up to two ROIs per image will be kept.",
       autoDetectProgress:
         "Detecting eyes in {current} of {total}: {name}",
       autoDetectCompleted:
@@ -491,6 +503,7 @@ function updateControlStates() {
   const hasRois = rois.length > 0;
 
   pingBtn.disabled = isBusy;
+  detectBtn.disabled = isBusy || !hasImage;
   classifyBtn.disabled = isBusy || !hasImage || !hasRois;
   openOriginalBtn.disabled = isBusy || !hasImage;
   clearHistoryBtn.disabled = isBusy || sessionHistory.length === 0;
@@ -1221,7 +1234,7 @@ function normalizeDetectResponse(j, threshold) {
       x2: Number(r.x2),
       y2: Number(r.y2),
       score: r.score != null ? Number(r.score) : null,
-      label: r.label ?? "eyes",
+      label: r.label ?? "ojo",
     }))
     .filter((r) => r.score == null || r.score >= threshold)
     .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
@@ -1234,6 +1247,75 @@ async function detectFile(file, threshold) {
 
   const j = await postForm(`${apiBase.value}/v1/detect/upload`, fd);
   return normalizeDetectResponse(j, threshold);
+}
+
+async function detectCurrentImage() {
+  const file = getCurrentFile();
+  if (!file || currentFileIndex < 0) {
+    setMessage(t("messages.noImageSelected"), "info");
+    return;
+  }
+
+  const threshold = Number(confIn.value || 0.25);
+  setBusy(true);
+
+  imageStates[currentFileIndex] = {
+    ...(imageStates[currentFileIndex] || emptyImageState()),
+    rois: [],
+    lastResponse: null,
+    selectedIdx: null,
+    detectStatus: "detecting",
+    detectError: null,
+  };
+  restoreCurrentImageState();
+  draw();
+  updateTopInfo();
+
+  setMessage(t("messages.detectCurrentStart", { name: file.name }), "info");
+
+  try {
+    const detectedRois = await detectFile(file, threshold);
+
+    imageStates[currentFileIndex] = {
+      ...(imageStates[currentFileIndex] || emptyImageState()),
+      rois: detectedRois,
+      lastResponse: null,
+      selectedIdx: detectedRois.length ? 0 : null,
+      detectStatus: "done",
+      detectError: null,
+    };
+
+    restoreCurrentImageState();
+    draw();
+    updateTopInfo();
+
+    if (detectedRois.length) {
+      setMessage(
+        t("messages.detectCurrentDone", { name: file.name, count: detectedRois.length }),
+        "ok"
+      );
+    } else {
+      setMessage(t("messages.detectCurrentNoRois", { name: file.name }), "info");
+    }
+  } catch (error) {
+    imageStates[currentFileIndex] = {
+      ...(imageStates[currentFileIndex] || emptyImageState()),
+      rois: [],
+      lastResponse: null,
+      selectedIdx: null,
+      detectStatus: "error",
+      detectError: String(error),
+    };
+    restoreCurrentImageState();
+    draw();
+    updateTopInfo();
+    setMessage(
+      t("messages.detectError", { name: file.name, error: String(error) }),
+      "err"
+    );
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function autoDetectAllSelectedFiles() {
@@ -1350,8 +1432,13 @@ async function loadFilesIntoSession(files) {
 
   loadCurrentImage();
 
-  if (selectedFiles.length) {
+  if (selectedFiles.length && autoDetectOnLoad.checked) {
     await autoDetectAllSelectedFiles();
+  } else if (selectedFiles.length) {
+    setMessage(
+      t("messages.imageReadyNoDetected", { name: selectedFiles[0].name }),
+      "info"
+    );
   } else {
     setMessage(t("messages.initial"), "info");
   }
@@ -1416,8 +1503,10 @@ function applyTranslations() {
   nextImageBtn.textContent =
     currentLang === "es" ? "Imagen siguiente →" : "Next image →";
 
+  detectBtn.textContent = t("buttons.detect");
   classifyBtn.textContent = t("buttons.classify");
   openOriginalBtn.textContent = t("buttons.openOriginal");
+  $("autoDetectOnLoadLabel").textContent = t("labels.autoDetectOnLoad");
 
   $("imageSectionTitle").textContent = t("sections.image");
   $("previewFileLabel").textContent = t("labels.currentFile");
@@ -1505,6 +1594,8 @@ pingBtn.addEventListener("click", async () => {
 });
 
 langToggleBtn.addEventListener("click", toggleLanguage);
+
+detectBtn.addEventListener("click", detectCurrentImage);
 
 // --- Pointer Events ---
 stage.style.touchAction = "none";
@@ -1711,6 +1802,7 @@ classifyBtn.addEventListener("click", async () => {
   try {
     const fd = new FormData();
     fd.append("file", f);
+    fd.append("conf", String(Number(confIn.value || 0.25)));
     fd.append(
       "rois_json",
       JSON.stringify(
