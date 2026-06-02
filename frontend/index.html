@@ -96,9 +96,15 @@
           </div>
 
           <div class="row actions compactActions">
+            <button id="detectBtn" class="ghost" type="button">Detectar ojos</button>
             <button id="classifyBtn" class="accent" type="button">Clasificar ROIs</button>
             <button id="openOriginalBtn" class="ghost" type="button">Ver imagen completa</button>
           </div>
+
+          <label class="checkRow" for="autoDetectOnLoad">
+            <input id="autoDetectOnLoad" type="checkbox" checked />
+            <span id="autoDetectOnLoadLabel">Detectar automáticamente al cargar</span>
+          </label>
 
           <div class="row infoRow">
             <span id="modeOut" class="statusChip">Modo: seleccionar</span>
