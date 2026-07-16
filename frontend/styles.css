@@ -678,6 +678,19 @@ button.activeMode{
   flex:1 1 180px;
 }
 
+.controlsPanel .twoColumnActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.controlsPanel .twoColumnActions button {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+}
+
 .controlsPanel .navRow{
   display:flex;
   flex-wrap:wrap;
