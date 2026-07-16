@@ -26,39 +26,6 @@ _LABELS: Optional[List[str]] = None
 _MODEL_LOCK = threading.Lock()
 _GCS: Optional[storage.Client] = None
 
-class CompatibleInputLayer(tf.keras.layers.InputLayer):
-    """Permite cargar modelos guardados con batch_shape usando Keras 2.15."""
-
-    @classmethod
-    def from_config(cls, config):
-        config = dict(config)
-
-        batch_shape = config.pop(
-            "batch_shape",
-            None,
-        )
-
-        if (
-            batch_shape is not None
-            and "batch_input_shape" not in config
-        ):
-            config["batch_input_shape"] = tuple(
-                batch_shape
-            )
-
-        return cls(**config)
-
-
-def _load_keras_model(local_path: str) -> tf.keras.Model:
-    """Carga el modelo registrando compatibilidad para InputLayer."""
-
-    return tf.keras.models.load_model(
-        local_path,
-        compile=False,
-        custom_objects={
-            "InputLayer": CompatibleInputLayer,
-        },
-    )
 
 def _get_gcs_client() -> storage.Client:
     global _GCS
@@ -234,7 +201,7 @@ def _load_model_if_needed() -> Tuple[tf.keras.Model, Tuple[int, int], Optional[L
         log.info("Cargando modelo Keras desde: %s (tf=%s)", local_path, tf.__version__)
 
         try:
-            _MODEL = tf.keras.models.load_model(local_path)
+            _MODEL = tf.keras.models.load_model(local_path, compile=False)
         except Exception as e:
             log.exception("load_model falló, borrar cache y reintentar 1 vez. err=%s", e)
             try:
@@ -243,7 +210,7 @@ def _load_model_if_needed() -> Tuple[tf.keras.Model, Tuple[int, int], Optional[L
             except Exception:
                 pass
             local_path = _ensure_model_local_path(model_uri)
-            _MODEL = tf.keras.models.load_model(local_path)
+            _MODEL = tf.keras.models.load_model(local_path, compile=False)
 
         _MODEL_HW = _infer_hw(_MODEL)
         _LABELS = _load_labels_from_env()
