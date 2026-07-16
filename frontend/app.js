@@ -69,7 +69,7 @@ let currentObjectUrl = null;
 // Estado por imagen en la sesión actual
 let imageStates = [];
 
-// Historial acumulado de sesión
+// Historial acumulado de la sesion
 let sessionHistory = [];
 
 // Estado UI
