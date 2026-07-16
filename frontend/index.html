@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IRFlies Web</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <p id="heroBrand" class="eyebrow">IRFlies-Web</p>
+        <h1 id="heroTitle">Detección y clasificación de ojos</h1>
+        <p id="heroText" class="heroText">
+          Carga una o varias imágenes, navega una por una, detecta ojos automáticamente,
+          corrige los ROIs si hace falta y clasifica después. El historial de resultados
+          se conserva durante toda la sesión.
+        </p>
+      </div>
+
+      <div class="heroSide">
+        <div class="heroActionsTop">
+          <button id="langToggleBtn" class="ghost smallBtn" type="button">English</button>
+          <span id="backendStatus" class="statusChip muted">Backend: verificando</span>
+        </div>
+
+        <details class="techTools">
+          <summary id="techSummary">Herramientas técnicas</summary>
+          <div class="techBody">
+            <div class="techRow">
+              <label id="apiBaseLabel" for="apiBase">API Base URL</label>
+              <input id="apiBase" type="text" />
+            </div>
+            <div class="techRow">
+              <button id="pingBtn" class="smallBtn" type="button">Verificar backend</button>
+              <span id="pingOut" class="muted smallText">Sin verificar</span>
+            </div>
+          </div>
+        </details>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="panel imagePanel">
+        <div class="sectionHead sectionHeadBetween">
+          <h2 id="imageSectionTitle">Imagen</h2>
+          <div class="previewMeta">
+            <span id="previewFileLabel" class="previewFileLabel">Archivo actual</span>
+            <strong id="previewFileName" class="previewFileName">—</strong>
+          </div>
+        </div>
+
+        <div class="imgStage" id="stage">
+          <img id="img" alt="preview" />
+          <div id="boxes"></div>
+        </div>
+
+        <p id="helperText" class="muted helper">
+          Toca o haz clic sobre un ROI para moverlo. Usa las esquinas para redimensionarlo.
+        </p>
+
+        <section class="examplesPanel">
+          <div class="examplesHead">
+            <h3 id="examplesTitle">Probar ejemplos</h3>
+            <p id="examplesHint" class="muted examplesHint">
+              Selecciona un ejemplo y se cargará automáticamente.
+            </p>
+          </div>
+
+          <div class="examplesRow">
+            <label id="exampleSelectLabel" for="exampleSelect">Ejemplo</label>
+            <select id="exampleSelect">
+              <option value="">Selecciona un ejemplo…</option>
+            </select>
+          </div>
+        </section>
+      </section>
+
+      <section class="sideCol">
+        <section class="panel controlsPanel">
+          <div class="sectionHead">
+            <h2 id="controlsTitle">Imagen y acciones</h2>
+          </div>
+
+          <div class="row">
+            <input id="file" type="file" accept="image/*" multiple />
+            <label id="confLabel" class="muted" for="conf">conf</label>
+            <input id="conf" type="number" step="0.01" min="0" max="1" value="0.25" style="width:90px" />
+          </div>
+
+          <div class="row navRow">
+            <button id="prevImageBtn" class="ghost smallBtn" type="button">← Imagen anterior</button>
+            <span id="imagePosition" class="statusChip muted">Sin imágenes cargadas</span>
+            <button id="nextImageBtn" class="ghost smallBtn" type="button">Imagen siguiente →</button>
+          </div>
+
+          <div class="row actions compactActions">
+            <button id="detectBtn" class="ghost" type="button">Detectar ojos</button>
+            <button id="classifyBtn" class="accent" type="button">Clasificar ROIs</button>
+            <button id="openOriginalBtn" class="ghost" type="button">Ver imagen completa</button>
+          </div>
+
+          <label class="checkRow" for="autoDetectOnLoad">
+            <input id="autoDetectOnLoad" type="checkbox" checked />
+            <span id="autoDetectOnLoadLabel">Detectar automáticamente al cargar</span>
+          </label>
+
+          <div class="row infoRow">
+            <span id="modeOut" class="statusChip">Modo: seleccionar</span>
+            <span id="roiCountOut" class="statusChip">ROIs: 0</span>
+            <span id="fileOut" class="statusChip muted">Sin imagen cargada</span>
+          </div>
+
+          <div id="msg" class="msg info">
+            Sube una o varias imágenes para comenzar.
+          </div>
+        </section>
+
+        <section class="panel summaryPanelCompact">
+          <div class="sectionHead">
+            <h2 id="summaryTitle">Resumen</h2>
+          </div>
+
+          <div class="summaryGrid">
+            <div class="summaryCard">
+              <span id="sumRoisLabel" class="summaryLabel">ROIs actuales</span>
+              <strong id="sumRois">0</strong>
+            </div>
+            <div class="summaryCard">
+              <span id="sumClassLabel" class="summaryLabel">Clase dominante</span>
+              <strong id="sumClass">—</strong>
+            </div>
+            <div class="summaryCard">
+              <span id="sumScoreLabel" class="summaryLabel">Score medio</span>
+              <strong id="sumScore">—</strong>
+            </div>
+          </div>
+
+          <div class="summaryResultsBlock">
+            <div class="sectionHead smallHead">
+              <h3 id="currentResultsTitle">Resultados actuales</h3>
+            </div>
+            <div id="currentResultsList" class="currentResultsList">
+              <div class="emptyBlock muted">Todavía no hay resultados para esta imagen.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel roiPanelCompact">
+          <div class="sectionHead">
+            <h2 id="roiPanelTitle">ROIs</h2>
+          </div>
+          <div id="roiList" class="list"></div>
+        </section>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="sectionHead historyHead">
+        <h2 id="historyTitle">Historial de sesión</h2>
+        <div class="historyActions">
+          <button id="exportCsvBtn" class="ghost smallBtn" type="button">Exportar CSV</button>
+          <button id="clearHistoryBtn" class="ghost smallBtn" type="button">Limpiar historial</button>
+        </div>
+      </div>
+
+      <div class="tableWrap">
+        <table class="resultsTable">
+          <thead>
+            <tr>
+              <th id="historyFileHead">Archivo</th>
+              <th id="historyRoisHead">ROIs</th>
+              <th id="historyDominantHead">Clase dominante</th>
+              <th id="historyMeanHead">Score medio</th>
+              <th id="historyDetailHead">Detalle</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr>
+              <td colspan="5" class="emptyCell">Todavía no hay resultados guardados en esta sesión.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
