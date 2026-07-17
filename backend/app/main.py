@@ -29,25 +29,16 @@ from .storage import (
     delete_object,
 )
 from .yolo_service import detect_rois
-from contextlib import asynccontextmanager
 from .classifier_service import (
     classify_image,
-    classify_crops_batch,
-    warmup_classifier,
+    classify_crops_batch
 )
 from fastapi.middleware.cors import CORSMiddleware
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    if settings.classifier_enabled:
-        warmup_classifier()
-    yield
 
 
 app = FastAPI(
     title="IRFlies API",
-    version="1.1.1",
-    lifespan=lifespan,
+    version="1.1.1"
 )
 
 app.add_middleware(
