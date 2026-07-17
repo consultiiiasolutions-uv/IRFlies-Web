@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # Detección YOLO
     yolo_enabled: bool = False
     yolo_model_uri: str = ""
-    yolo_max_detections: int = 6
+    yolo_max_detections: int = 10
     yolo_iou_thresh: float = 0.60
     default_detection_conf: float = 0.25
 
