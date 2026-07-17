@@ -135,8 +135,6 @@ def api_config():
         },
     )
 
-
-# --------------------
 # Preview (upload / GCS)
 # --------------------
 @app.post("/v1/preview/upload")
