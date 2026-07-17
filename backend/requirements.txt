@@ -12,9 +12,9 @@ requests==2.32.3
 Pillow==11.3.0
 numpy==1.26.4
 
-tensorflow-cpu==2.16.1
-keras==3.3.3
-h5py==3.10.0
-protobuf<5
+tensorflow-cpu==2.20.0
+keras==3.11.3
+h5py==3.14.0
+protobuf==5.29.5
 
 ultralytics==8.4.16
