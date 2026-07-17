@@ -12,8 +12,8 @@ requests==2.32.3
 Pillow==11.3.0
 numpy==1.26.4
 
-tensorflow-cpu==2.15.1
-keras==2.15.0
+tensorflow-cpu==2.16.1
+keras==3.3.3
 h5py==3.10.0
 protobuf<5
 
