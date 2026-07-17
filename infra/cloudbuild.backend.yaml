@@ -37,6 +37,8 @@ steps:
         "--region", "${_DEPLOY_REGION}",
         "--platform", "managed",
         "--allow-unauthenticated",
+        "--no-traffic",
+        "--tag", "candidate",
         "--service-account", "${_RUN_SA}",
         "--max-instances", "15",
         "--concurrency", "1",
