@@ -319,6 +319,28 @@ def classify_image(image_bytes: bytes) -> ClassifyResponse:
 
     return _response_from_row(pred, labels)
 
+def warmup_classifier() -> None:
+    model, hw, _ = _load_model_if_needed()
+
+    x = np.zeros((1, hw[0], hw[1], 3), dtype=np.float32)
+    pred = model(x, training=False)
+
+    if isinstance(pred, list):
+        pred = pred[0]
+
+    pred = np.asarray(
+        pred.numpy() if hasattr(pred, "numpy") else pred
+    )
+
+    if pred.shape != (1, 2):
+        raise RuntimeError(
+            f"Salida inesperada del clasificador: {pred.shape}"
+        )
+
+    if not np.isfinite(pred).all():
+        raise RuntimeError(
+            "El clasificador produjo valores no finitos"
+        )
 
 def classify_crops_batch(crops_rgb: List[Image.Image]) -> List[ClassifyResponse]:
     if not settings.classifier_enabled:
