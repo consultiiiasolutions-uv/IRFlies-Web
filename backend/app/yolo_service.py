@@ -119,7 +119,7 @@ def _load_yolo_if_needed():
 
 
 def detect_rois(image_bytes: bytes, conf: Optional[float] = None) -> List[RoiXYXY]:
-    """Detecta hasta seis regiones de ojos según IRFLIES_YOLO_MAX_DETECTIONS.
+    """Detecta hasta 10 regiones de ojos según IRFLIES_YOLO_MAX_DETECTIONS.
 
     El flujo replica lo más importante del escritorio: corrige orientación EXIF, convierte a RGB,
     guarda temporalmente la imagen y entrega una ruta local a Ultralytics. No se aplica NMS manual
@@ -129,7 +129,7 @@ def detect_rois(image_bytes: bytes, conf: Optional[float] = None) -> List[RoiXYX
         return []
 
     effective_conf = settings.default_detection_conf if conf is None else float(conf)
-    max_det = max(1, int(settings.yolo_max_detections or 6))
+    max_det = max(1, int(settings.yolo_max_detections or 10))
     iou = float(settings.yolo_iou_thresh or 0.60)
 
     img = Image.open(io.BytesIO(image_bytes))
