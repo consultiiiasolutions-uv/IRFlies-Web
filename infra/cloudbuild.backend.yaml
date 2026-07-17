@@ -41,6 +41,7 @@ steps:
         "--tag", "candidate",
         "--service-account", "${_RUN_SA}",
         "--max-instances", "8",
+        "--max", "8",
         "--concurrency", "1",
         "--cpu", "1",
         "--memory", "4Gi",
