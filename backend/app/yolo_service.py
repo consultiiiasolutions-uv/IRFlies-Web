@@ -159,6 +159,7 @@ def detect_rois(image_bytes: bytes, conf: Optional[float] = None) -> List[RoiXYX
             conf=effective_conf,
             iou=iou,
             max_det=max_det,
+            device="cpu",
             verbose=False,
         )[0]
 
